@@ -111,7 +111,8 @@ Function::Function(uint32_t function_id, uint32_t result_type_id,
       pseudo_exit_block_(kInvalidId),
       cfg_constructs_(),
       variable_ids_(),
-      parameter_ids_() {}
+      parameter_ids_(),
+      reverse_edges_() {}
 
 bool Function::IsFirstBlock(uint32_t block_id) const {
   return !ordered_blocks_.empty() && *first_block() == block_id;
@@ -211,6 +212,10 @@ void Function::RegisterBlockEnd(vector<uint32_t> next_list,
         blocks_.insert({successor_id, BasicBlock(successor_id)});
     if (success) {
       undefined_blocks_.insert(successor_id);
+    }
+    // Track reverse edges: branches to blocks whose definitions have been seen.
+    if (undefined_blocks_.count(successor_id) == 0) {
+      reverse_edges_[successor_id].insert(current_block_);
     }
     next_blocks.push_back(&inserted_block->second);
   }

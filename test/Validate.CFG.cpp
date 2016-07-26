@@ -1112,7 +1112,7 @@ OpDecorate %id BuiltIn GlobalInvocationId
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
 }
 
-TEST_F(ValidateCFG, LoopWithoutBackEdgesBad) {
+TEST_F(ValidateCFG, LoopWithUnreachableContinueConstructGood) {
   string str = R"(
            OpCapability Shader
            OpMemoryModel Logical GLSL450
@@ -1137,6 +1137,27 @@ TEST_F(ValidateCFG, LoopWithoutBackEdgesBad) {
            OpReturn
 %cont    = OpLabel
            OpBranch %loop
+%exit    = OpLabel
+           OpReturn
+           OpFunctionEnd
+)";
+
+  CompileSuccessfully(str);
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions()) << str;
+}
+
+TEST_F(ValidateCFG, LoopWithZeroBackEdgesBad) {
+  string str = R"(
+           OpCapability Shader
+           OpMemoryModel Logical GLSL450
+           OpEntryPoint Fragment %main "main"
+           OpName %loop "loop"
+%voidt   = OpTypeVoid
+%funct   = OpTypeFunction %voidt
+%main    = OpFunction %voidt None %funct
+%loop    = OpLabel
+           OpLoopMerge %exit %exit None
+           OpBranch %exit
 %exit    = OpLabel
            OpReturn
            OpFunctionEnd

@@ -222,11 +222,13 @@ spv_result_t MergeBlockAssert(ValidationState_t& _, uint32_t merge_block) {
 }
 
 /// Update the continue construct's exit blocks once the backedge blocks are
-/// identified in the CFG.
+/// identified in the CFG.  This assumes dominators have been computed.
 void UpdateContinueConstructExitBlocks(
     Function& function, const vector<pair<uint32_t, uint32_t>>& back_edges) {
   auto& constructs = function.constructs();
+
   // TODO(umar): Think of a faster way to do this
+  // Identify loop latch edges from CFG back edges.
   for (auto& edge : back_edges) {
     uint32_t back_edge_block_id;
     uint32_t loop_header_block_id;
@@ -246,6 +248,30 @@ void UpdateContinueConstructExitBlocks(
         BasicBlock* back_edge_block;
         tie(back_edge_block, ignore) = function.GetBlock(back_edge_block_id);
         continue_construct->set_exit(back_edge_block);
+      }
+    }
+  }
+
+  // Now find exit blocks for unreachable continue constructs. They are the only
+  // ones that don't yet have an exit block set.
+  for (auto& continue_construct : constructs) {
+    if (continue_construct.type() != ConstructType::kContinue) continue;
+    if (continue_construct.exit_block()) continue;
+
+    const BasicBlock* continue_target = continue_construct.entry_block();
+    if (continue_target->reachable()) continue;
+
+    const Construct* loop_construct =
+        continue_construct.corresponding_constructs().back();
+    const BasicBlock* loop_header = loop_construct->entry_block();
+
+    for (auto* potential_latch_block :
+         function.PredecessorsDefinedAfterBlock(loop_header->id())) {
+      if (continue_target->dominates(*potential_latch_block) &&
+          potential_latch_block->postdominates(*continue_target)) {
+        // TODO(dneto): Should we error out if more than one potential latch
+        // block satisifes these conditions?
+        continue_construct.set_exit(potential_latch_block);
       }
     }
   }
@@ -319,14 +345,41 @@ spv_result_t StructuredControlFlowChecks(
              << _.getIdName(header_block)
              << ") can only be formed between a block and a loop header.";
     }
-    bool success;
-    tie(ignore, success) = loop_headers.insert(header_block);
-    if (!success) {
-      // TODO(umar): List the back-edge blocks that are branching to loop
-      // header
-      return _.diag(SPV_ERROR_INVALID_CFG)
-             << "Loop header " << _.getIdName(header_block)
-             << " targeted by multiple back-edges";
+    // Find loop headers with continue constructs reachable from the
+    // ordinary entry node, not the pseudo entry node.
+    if (function.GetBlock(back_edge_block).first->reachable()) {
+      bool success;
+      tie(ignore, success) = loop_headers.insert(header_block);
+      if (!success) {
+        // TODO(umar): List the back-edge blocks that are branching to loop
+        // header
+        return _.diag(SPV_ERROR_INVALID_CFG)
+               << "Loop header " << _.getIdName(header_block)
+               << " targeted by multiple back-edges";
+      }
+    }
+  }
+
+  // Find loop headers with continue constructs unreachable from the
+  // ordinary entry node.
+  for (const auto& construct : function.constructs()) {
+    if (construct.type() != ConstructType::kContinue) continue;
+    if (construct.entry_block()->reachable()) continue;
+    if (construct.exit_block()->reachable()) continue;
+    if (construct.exit_block()) {
+      // We did manage to find a valid connection between the loop header
+      // block and this continue construct.
+      bool success;
+      const auto* loop_header =
+          construct.corresponding_constructs().back()->entry_block();
+      tie(ignore, success) = loop_headers.insert(loop_header->id());
+      if (!success) {
+        // TODO(umar): List the back-edge blocks that are branching to loop
+        // header
+        return _.diag(SPV_ERROR_INVALID_CFG)
+               << "Loop header " << _.getIdName(loop_header->id())
+               << " targeted by multiple back-edges";
+      }
     }
   }
 

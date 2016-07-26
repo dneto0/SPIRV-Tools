@@ -189,6 +189,14 @@ class Function {
   /// Prints a directed graph of the CFG of the current funciton
   void PrintBlocks() const;
 
+  // Returns a set of blocks that are CFG predecessors to target_id, but which
+  // are either either target_id itself, or whose definition appears after
+  // the definition of target_id
+  const std::unordered_set<BasicBlock*>& PredecessorsDefinedAfterBlock(
+      uint32_t target_id) {
+    return reverse_edges_[target_id];
+  }
+
  private:
   // Computes the representation of the augmented CFG.
   // Populates augmented_successors_map_ and augmented_predecessors_map_.
@@ -270,6 +278,11 @@ class Function {
 
   /// The function parameter ids of the functions
   std::vector<uint32_t> parameter_ids_;
+
+  /// The CFG edges that point (textually) backward in the stream of blocks.
+  /// This maps the ID of a block A to the blocks that branch to A and
+  /// either appear after A in the stream, or are A itself.
+  std::unordered_map<uint32_t, std::unordered_set<BasicBlock*>> reverse_edges_;
 };
 
 }  /// namespace libspirv
