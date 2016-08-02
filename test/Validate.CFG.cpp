@@ -1173,7 +1173,7 @@ TEST_F(ValidateCFG, LoopWithBackEdgeFromUnreachableContinueConstructGood) {
 )";
 
   CompileSuccessfully(str);
-  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions()) << getDiagnosticString();
 }
 
 TEST_P(ValidateCFG,
