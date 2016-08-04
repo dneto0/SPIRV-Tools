@@ -200,20 +200,6 @@ void Function::RegisterBlockEnd(vector<uint32_t> next_list,
   assert(
       current_block_ &&
       "RegisterBlockEnd can only be called when parsing a binary in a block");
-  if (current_block_->is_type(kBlockTypeLoop)) {
-    // Add a CFG edge from this block to the Continue Target, if the continue
-    // target is different from the loop header.  That's needed so we can find
-    // the loop back-edge even if the continue construct is otherwise unreachable.
-    // If this block is marked as Loop-type,  then the continue construct is the
-    // most recently created CFG construct.
-    auto continue_target_id = cfg_constructs_.back().entry_block()->id();
-    if (continue_target_id != current_block_->id() &&
-        std::find(next_list.begin(), next_list.end(), continue_target_id) ==
-        next_list.end()) {
-      next_list.push_back(continue_target_id);
-    }
-  }
-
   vector<BasicBlock*> next_blocks;
   next_blocks.reserve(next_list.size());
 
@@ -226,6 +212,21 @@ void Function::RegisterBlockEnd(vector<uint32_t> next_list,
       undefined_blocks_.insert(successor_id);
     }
     next_blocks.push_back(&inserted_block->second);
+  }
+
+  if (current_block_->is_type(kBlockTypeLoop)) {
+    // For each loop header, record the set of its successors together, and add
+    // its continue target if the continue target is not the loop header
+    // itself.
+    // If this block is marked as Loop-type,  then the continue construct is
+    // the most recently created CFG construct.
+    auto continue_target = cfg_constructs_.back().entry_block();
+    std::vector<BasicBlock*>& next_blocks_plus_continue_target =
+        loop_header_successors_plus_continue_target_map_[current_block_];
+    next_blocks_plus_continue_target = next_blocks;
+    if (continue_target != current_block_) {
+      next_blocks_plus_continue_target.push_back(continue_target);
+    }
   }
 
   current_block_->RegisterBranchInstruction(branch_instruction);
@@ -302,6 +303,16 @@ Function::GetBlocksFunction Function::AugmentedCFGSuccessorsFunction() const {
     auto where = augmented_successors_map_.find(block);
     return where == augmented_successors_map_.end() ? block->successors()
                                                     : &(*where).second;
+  };
+}
+
+Function::GetBlocksFunction
+Function::AugmentedCFGSuccessorsFunctionIncludingHeaderToContinueEdge() const {
+  return [this](const BasicBlock* block) {
+    auto where = loop_header_successors_plus_continue_target_map_.find(block);
+    return where == loop_header_successors_plus_continue_target_map_.end()
+               ? AugmentedCFGSuccessorsFunction()(block)
+               : &(*where).second;
   };
 }
 
