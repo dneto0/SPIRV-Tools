@@ -160,7 +160,6 @@ Block& operator>>(Block& lhs, vector<Block> successors) {
 
 /// Assigns the successor for the Block on the lhs
 Block& operator>>(Block& lhs, Block& successor) {
-  std::cout << lhs.label_ <<std::endl;
   assert(lhs.type_ == SpvOpBranch);
   lhs.successors_.push_back(successor);
   return lhs;
