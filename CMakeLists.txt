@@ -124,6 +124,17 @@ function(spvtools_default_compile_options TARGET)
   endif()
 endfunction()
 
+function(spvtools_gtest_options TARGET)
+  # The googletest code builds with -std=gnu++11 but not with -std=c++11.
+  # Compensate for that here.
+  # See https://github.com/google/googletest/issues/813
+  if (CYGWIN)
+    if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+      target_compile_options(${TARGET} PRIVATE -std=gnu++11)
+    endif()
+  endif()
+endfunction()
+
 if(NOT COMMAND find_host_package)
   macro(find_host_package)
     find_package(${ARGN})
