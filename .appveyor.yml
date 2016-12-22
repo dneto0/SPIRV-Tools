@@ -12,6 +12,7 @@ platform:
   - Any CPU
 
 configuration:
+  - CygwinGCC # Run Cygwin with GCC only in Visual Studio 2013 image.
   - Debug
   - Release
 
@@ -26,6 +27,13 @@ matrix:
 
 # scripts that run after cloning repository
 install:
+  - echo Install cmake for Cygwin
+  - appveyor DownloadFile https://cygwin.com/setup-x86.exe -FileName c:\cygwin\setup-x86.exe
+  - c:\cygwin\setup-x86.exe -qnNdO -R C:/cygwin -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup
+  - c:\cygwin\setup-x86.exe -qnNdO -R C:/cygwin -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P cmake
+  - echo Download supporting projects
+  - if exist external\\spirv-headers del /q /f /s external\\spirv-headers
+  - if exist external\\googletest    del /q /f /s external\\googletest
   - git clone https://github.com/KhronosGroup/SPIRV-Headers.git external/spirv-headers
   - git clone https://github.com/google/googletest.git external/googletest
 
@@ -34,9 +42,11 @@ build:
   verbosity: minimal
 
 build_script:
-  - mkdir build && cd build
-  - cmake ..
-  - cmake --build . --config %CONFIGURATION%
+  - mkdir build
+  - cd build
+  - if %CONFIGURATION%==CygwinGCC c:\cygwin\bin\bash -l -c "(echo $APPVEYOR_JOB_NAME | grep -v 2013) || (cd /cygdrive/c/projects/spirv-tools/build && /usr/bin/cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_BUILD_TYPE=Release 2>&1 && /usr/bin/cmake --build . 2>&1)"
+  - if not %CONFIGURATION%==CygwinGCC cmd /c "cmake .. && cmake --build . --config %CONFIGURATION%"
 
 test_script:
-  - ctest -C %CONFIGURATION% --output-on-failure
+  - if %CONFIGURATION%==CygwinGCC c:\cygwin\bin\bash -l -c "(echo $APPVEYOR_JOB_NAME | grep -v 2013) || (cd /cygdrive/c/projects/spirv-tools/build && /usr/bin/ctest --output-on-failure 2>&1)"
+  - if not %CONFIGURATION%==CygwinGCC ctest -C %CONFIGURATION% --output-on-failure
