@@ -33,3 +33,4 @@ function(add_spvtools_example)
 endfunction()
 
 add_subdirectory(cpp-interface)
+add_subdirectory(descriptors)
