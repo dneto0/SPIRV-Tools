@@ -19,6 +19,9 @@ add_spvtools_example(
        main.cpp
   LIBS SPIRV-Tools
 )
+target_include_directories(spirv-tools-descriptors
+  PRIVATE ${SPIRV-Headers_SOURCE_DIR}/include
+)
 
 add_spvtools_example(
   TARGET spirv-tools-entry-point-info-test
@@ -34,7 +37,9 @@ if (NOT ${SPIRV_SKIP_EXECUTABLES})
   endif()
   target_include_directories(spirv-tools-entry-point-info-test
         PRIVATE ${gmock_SOURCE_DIR}/include
-                ${gtest_SOURCE_DIR}/include)
+                ${gtest_SOURCE_DIR}/include
+                ${SPIRV-Headers_SOURCE_DIR}/include
+                )
   add_test(NAME spirv-tools-entry-point-info-test
         COMMAND spirv-tools-entry-point-info-test)
 endif()
