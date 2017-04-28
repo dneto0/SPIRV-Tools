@@ -23,6 +23,7 @@ spv_result_t GetEntryPointInfo(const spv_const_context context,
                                std::vector<EntryPointInfo>* entry_points,
                                spv_diagnostic* diagnostic) {
   if (!entry_points) return SPV_ERROR_INVALID_POINTER;
+  entry_points.clear();
   auto status = spvBinaryParse(context, nullptr, words, num_words, nullptr,
                                nullptr, diagnostic);
 

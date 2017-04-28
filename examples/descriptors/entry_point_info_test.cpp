@@ -89,4 +89,19 @@ TEST(EntryPointInfo, NoEntryPointsReturnsEmptyVector) {
   EXPECT_THAT(infos, Eq(Infos{}));
 }
 
+TEST(EntryPointInfo, ResetsThePassedInVector) {
+  Infos infos(10); // Make non-empty.
+  auto binary = Assemble(R"(
+    OpCapability Addresses
+    OpCapability Linkage
+    OpCapability Kernel
+    OpMemoryModel Physical32 OpenCL
+  )");
+  EXPECT_EQ(SPV_SUCCESS,
+            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
+                              nullptr));
+  // Look. It was reset.
+  EXPECT_THAT(infos, Eq(Infos{}));
+}
+
 }  // anonymous namespace
