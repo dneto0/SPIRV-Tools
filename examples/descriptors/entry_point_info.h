@@ -28,10 +28,14 @@ struct EntryPointInfo {
   std::string name;
 };
 
-// Builds a description the entry points in the module specified as |num_words|
-// words at |words|.  The |entry_points| pointer must not be null.  Returns
-// SPV_SUCCESS on success.  On failure, populates the |diagnostic| argument,
-// if that diagnostic is not null.
+inline bool operator==(const EntryPointInfo& lhs, const EntryPointInfo& rhs) {
+  return lhs.name == rhs.name;
+}
+
+// Builds a description the entry points in the valid module specified as
+// |num_words| words at |words|.  The |entry_points| pointer must not be null.
+// Returns SPV_SUCCESS on success.  On failure, populates the |diagnostic|
+// argument, if that diagnostic is not null.
 spv_result_t GetEntryPointInfo(const spv_const_context context,
                                const uint32_t* words, size_t num_words,
                                std::vector<EntryPointInfo>* entry_points,

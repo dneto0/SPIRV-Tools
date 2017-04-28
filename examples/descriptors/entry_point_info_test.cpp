@@ -14,12 +14,22 @@
 
 #include "gmock/gmock.h"
 
+#include <vector>
+
+#include "spirv-tools/libspirv.hpp"
+
 #include "entry_point_info.h"
 
 namespace {
 
 using spirv_example::GetEntryPointInfo;
+using spirv_example::EntryPointInfo;
+using testing::Eq;
 
+using Infos = std::vector<EntryPointInfo>;
+using Words = std::vector<uint32_t>;
+
+// A scoped SPIRV-Tools context object.
 class Context {
  public:
   Context() : context(spvContextCreate(SPV_ENV_UNIVERSAL_1_1)) {}
@@ -29,9 +39,47 @@ class Context {
   spv_context context;
 };
 
+// Assembles a SPIR-V module from a string.  Returns a vector of words.
+// Assumes the assembly is valid.
+std::vector<uint32_t> Assemble(std::string source) {
+  spvtools::SpirvTools tools(SPV_ENV_UNIVERSAL_1_1);
+  std::vector<uint32_t> result;
+  tools.Assemble(source, &result);
+  EXPECT_GE(result.size(), 5u);
+  return result;
+}
+
 TEST(EntryPointInfo, NullEntryPointsReturnsError) {
   EXPECT_EQ(SPV_ERROR_INVALID_POINTER,
             GetEntryPointInfo(Context(), nullptr, 0, nullptr, nullptr));
+}
+
+TEST(EntryPointInfo, NullBinaryReturnsError) {
+  Infos infos;
+  EXPECT_EQ(SPV_ERROR_INVALID_BINARY,
+            GetEntryPointInfo(Context(), nullptr, 0, &infos, nullptr));
+}
+
+TEST(EntryPointInfo, BadBinaryReturnsError) {
+  Infos infos;
+  Words binary{1, 2, 3, 4, 5, 6, 7};
+  EXPECT_EQ(SPV_ERROR_INVALID_BINARY,
+            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
+                              nullptr));
+}
+
+TEST(EntryPointInfo, NoEntryPointsReturnsEmptyVector) {
+  Infos infos;
+  auto binary = Assemble(R"(
+    OpCapability Addresses
+    OpCapability Linkage
+    OpCapability Kernel
+    OpMemoryModel Physical32 OpenCL
+  )");
+  EXPECT_EQ(SPV_SUCCESS,
+            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
+                              nullptr));
+  EXPECT_THAT(infos, Eq(Infos{}));
 }
 
 }  // anonymous namespace

@@ -26,7 +26,7 @@ add_spvtools_example(
        entry_point_info_test.cpp
   LIBS SPIRV-Tools
        gmock
-       gtest_main
+       gmock_main
 )
 if (NOT ${SPIRV_SKIP_EXECUTABLES})
   if (${COMPILER_IS_LIKE_GNU})
