@@ -12,6 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO(dneto): Capture variables referenced in entry point function itself
+// TODO(dneto): Cover mentions in: OpVariable
+// TODO(dneto): Cover mentions in: OpAccessChain, OpInBoundsAccessChain
+// TODO(dneto): Cover mentions in: OpFunctionParamter
+// TODO(dneto): Cover mentions in: OpImageTexelPointer
+// TODO(dneto): Cover mentions in: OpCopyObject
+// TODO(dneto): Cover mentions in: OpAtomic*
+// TODO(dneto): Variables referenced in call stack.
+
 #include "entry_point_info.h"
 
 #include <cassert>
