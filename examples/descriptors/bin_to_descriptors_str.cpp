@@ -14,11 +14,21 @@
 
 #include "bin_to_descriptors_str.h"
 
-spv_result_t BinaryToDescriptorsStr(const spv_const_context,  // context,
-                                    const uint32_t*,          // words,
-                                    size_t,                   // num_words,
-                                    std::ostream*,            // out,
-                                    spv_diagnostic*           // diagnostic
-                                    ) {
+#include <vector>
+
+#include "entry_point_info.h"
+
+spv_result_t BinaryToDescriptorsStr(const spv_const_context context,
+                                    const uint32_t* words, size_t num_words,
+                                    std::ostream* out,
+                                    spv_diagnostic* diagnostic) {
+  std::vector<spirv_example::EntryPointInfo> entry_points;
+  auto status = spirv_example::GetEntryPointInfo(context, words, num_words,
+                                                 &entry_points, diagnostic);
+  if (status == SPV_SUCCESS) {
+    for (auto& entry_point : entry_points) {
+      *out << entry_point.name << std::endl;
+    }
+  }
   return SPV_SUCCESS;
 }

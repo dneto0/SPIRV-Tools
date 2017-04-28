@@ -14,7 +14,27 @@
 
 add_spvtools_example(
   TARGET spirv-tools-descriptors
-  SRCS main.cpp
-       bin_to_descriptors_str.cpp
+  SRCS bin_to_descriptors_str.cpp
+       entry_point_info.cpp
+       main.cpp
   LIBS SPIRV-Tools
 )
+
+add_spvtools_example(
+  TARGET spirv-tools-entry-point-info-test
+  SRCS entry_point_info.cpp
+       entry_point_info_test.cpp
+  LIBS SPIRV-Tools
+       gmock
+       gtest_main
+)
+if (NOT ${SPIRV_SKIP_EXECUTABLES})
+  if (${COMPILER_IS_LIKE_GNU})
+    target_compile_options(spirv-tools-entry-point-info-test PRIVATE -Wno-undef)
+  endif()
+  target_include_directories(spirv-tools-entry-point-info-test
+        PRIVATE ${gmock_SOURCE_DIR}/include
+                ${gtest_SOURCE_DIR}/include)
+  add_test(NAME spirv-tools-entry-point-info-test
+        COMMAND spirv-tools-entry-point-info-test)
+endif()
