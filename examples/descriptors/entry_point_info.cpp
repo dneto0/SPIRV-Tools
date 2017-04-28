@@ -14,18 +14,19 @@
 
 #include "entry_point_info.h"
 
+#include "spirv-tools/libspirv.h"
+
 namespace spirv_example {
 
-spv_result_t GetEntryPointInfo(const spv_const_context,
+spv_result_t GetEntryPointInfo(const spv_const_context context,
                                const uint32_t* words, size_t num_words,
                                std::vector<EntryPointInfo>* entry_points,
                                spv_diagnostic* diagnostic) {
-  words = words;
-  num_words = num_words;
-  diagnostic = diagnostic;
   if (!entry_points) return SPV_ERROR_INVALID_POINTER;
+  auto status = spvBinaryParse(context, nullptr, words, num_words, nullptr,
+                               nullptr, diagnostic);
 
-  return SPV_SUCCESS;
+  return status;
 }
 
 }  // namespace spirv_example
