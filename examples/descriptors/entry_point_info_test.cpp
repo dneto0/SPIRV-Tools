@@ -120,7 +120,7 @@ TEST(EntryPointInfo, OneEntryPointTrivialBody) {
   EXPECT_EQ(SPV_SUCCESS,
             GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
                               nullptr));
-  EXPECT_THAT(infos, Eq(Infos{{"foobar"}}));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("foobar")}));
 }
 
 TEST(EntryPointInfo, SeveralEntryPointsTrivialBodies) {
@@ -141,10 +141,10 @@ TEST(EntryPointInfo, SeveralEntryPointsTrivialBodies) {
     OpReturn
     OpFunctionEnd
   )");
-  EXPECT_EQ(SPV_SUCCESS,
-            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
-                              nullptr));
-  EXPECT_THAT(infos, Eq(Infos{{" a first one! "}, {"foobar"}}));
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo(" a first one! "),
+                              EntryPointInfo("foobar")}));
 }
 
 }  // anonymous namespace

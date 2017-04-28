@@ -27,7 +27,7 @@ spv_result_t BinaryToDescriptorsStr(const spv_const_context context,
                                                  &entry_points, diagnostic);
   if (status == SPV_SUCCESS) {
     for (auto& entry_point : entry_points) {
-      *out << entry_point.name << std::endl;
+      *out << entry_point.name() << std::endl;
     }
   }
   return SPV_SUCCESS;
