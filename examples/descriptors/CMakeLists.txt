@@ -37,7 +37,7 @@ if (NOT ${SPIRV_SKIP_EXECUTABLES})
   endif()
   target_include_directories(spirv-tools-entry-point-info-test
         PRIVATE ${gmock_SOURCE_DIR}/include
-                ${gtest_SOURCE_DIR}/include)
+                ${gtest_SOURCE_DIR}/include
                 ${SPIRV_HEADER_INCLUDE_DIR}
                 )
   add_test(NAME spirv-tools-entry-point-info-test

@@ -104,4 +104,47 @@ TEST(EntryPointInfo, ResetsThePassedInVector) {
   EXPECT_THAT(infos, Eq(Infos{}));
 }
 
+TEST(EntryPointInfo, OneEntryPointTrivialBody) {
+  Infos infos;
+  auto binary = Assemble(R"(
+    OpCapability Shader
+    OpMemoryModel Logical GLSL450
+    OpEntryPoint Vertex %main "foobar"
+    %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    OpReturn
+    OpFunctionEnd
+  )");
+  EXPECT_EQ(SPV_SUCCESS,
+            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
+                              nullptr));
+  EXPECT_THAT(infos, Eq(Infos{{"foobar"}}));
+}
+
+TEST(EntryPointInfo, SeveralEntryPointsTrivialBodies) {
+  Infos infos;
+  auto binary = Assemble(R"(
+    OpCapability Shader
+    OpMemoryModel Logical GLSL450
+    OpEntryPoint Vertex %other " a first one! "
+    OpEntryPoint Vertex %main "foobar"
+    %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+    %other = OpFunction %void None %void_fn
+    %other_entry = OpLabel
+    OpReturn
+    OpFunctionEnd
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    OpReturn
+    OpFunctionEnd
+  )");
+  EXPECT_EQ(SPV_SUCCESS,
+            GetEntryPointInfo(Context(), binary.data(), binary.size(), &infos,
+                              nullptr));
+  EXPECT_THAT(infos, Eq(Infos{{" a first one! "}, {"foobar"}}));
+}
+
 }  // anonymous namespace
