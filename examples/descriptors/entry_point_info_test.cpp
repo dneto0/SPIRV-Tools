@@ -14,6 +14,7 @@
 
 #include "gmock/gmock.h"
 
+#include <sstream>
 #include <vector>
 
 #include "spirv-tools/libspirv.hpp"
@@ -42,10 +43,16 @@ class Context {
 // Assembles a SPIR-V module from a string.  Returns a vector of words.
 // Assumes the assembly is valid.
 std::vector<uint32_t> Assemble(std::string source) {
-  spvtools::SpirvTools tools(SPV_ENV_UNIVERSAL_1_1);
   std::vector<uint32_t> result;
+  spvtools::SpirvTools tools(SPV_ENV_UNIVERSAL_1_1);
+  std::ostringstream errs;
+  tools.SetMessageConsumer([&errs](spv_message_level_t, const char*,
+                                   const spv_position_t& pos,
+                                   const char* message) {
+    errs << pos.line << ":" << pos.column << ": " << message << "\n";
+  });
   tools.Assemble(source, &result);
-  EXPECT_GE(result.size(), 5u);
+  EXPECT_GE(result.size(), 5u) << errs.str();
   return result;
 }
 
