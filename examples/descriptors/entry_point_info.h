@@ -17,20 +17,46 @@
 
 #include "spirv-tools/libspirv.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
 namespace spirv_example {
 
+// The interesting facts about a descriptor binding.
+struct Descriptor {
+  uint32_t set;      // The DescriptorSet decoration.
+  uint32_t binding;  // The Binding decoration.
+};
+
+inline bool operator<(const Descriptor& lhs, const Descriptor& rhs) {
+  return lhs.set < rhs.set || (lhs.set == rhs.set && lhs.binding < lhs.binding);
+}
+
+inline bool operator==(const Descriptor& lhs, const Descriptor& rhs) {
+  return lhs.set == rhs.set && lhs.binding == rhs.binding;
+}
+
+
 // Facts about a single entry point.
-struct EntryPointInfo {
+class EntryPointInfo {
+ public:
+  EntryPointInfo() {}
+  explicit EntryPointInfo(const std::string& _name) : name_(_name) {}
+  explicit EntryPointInfo(const char* _name) : name_(std::string(_name)) {}
+
+  const std::string& name() const { return name_; }
+ private:
   // The name of the entry point.
-  std::string name;
+  std::string name_;
+  // The set of descriptors for variables referenced by this entry point.
+  std::set<Descriptor> descriptors_;
 };
 
 inline bool operator==(const EntryPointInfo& lhs, const EntryPointInfo& rhs) {
-  return lhs.name == rhs.name;
+  return lhs.name() == rhs.name();
 }
+
 
 // Builds a description the entry points in the valid module specified as
 // |num_words| words at |words|.  The |entry_points| pointer must not be null.
