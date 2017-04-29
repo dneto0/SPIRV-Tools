@@ -23,8 +23,10 @@
 
 namespace {
 
-using spirv_example::GetEntryPointInfo;
+using spirv_example::Descriptor;
+using spirv_example::Descriptors;
 using spirv_example::EntryPointInfo;
+using spirv_example::GetEntryPointInfo;
 using testing::Eq;
 
 using Infos = std::vector<EntryPointInfo>;
@@ -145,6 +147,49 @@ TEST(EntryPointInfo, SeveralEntryPointsTrivialBodies) {
                                            binary.size(), &infos, nullptr));
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo(" a first one! "),
                               EntryPointInfo("foobar")}));
+}
+
+// Returns the preamble for a standard shader with a "main" Vertex shader.
+std::string ShaderPreamble() {
+  return R"(
+    OpCapability Shader
+    OpMemoryModel Logical GLSL450
+    OpEntryPoint Vertex %main "main"
+)";
+}
+
+std::string ShaderTypes() {
+  return R"(
+    %void = OpTypeVoid
+    %void_fn = OpTypeFunction %void
+    %float = OpTypeFloat 32
+    %float_unic_ptr = OpTypePointer UniformConstant %float
+    %float_uni_ptr = OpTypePointer Uniform %float
+    %float_sb_ptr = OpTypePointer StorageBuffer %float
+    %float_arr = OpTypeRuntimeArray %float
+    %float_arr_unic_ptr = OpTypePointer UniformConstant %float_arr
+    %float_arr_uni_ptr = OpTypePointer Uniform %float_arr
+    %float_arr_sb_ptr = OpTypePointer StorageBuffer %float_arr
+)";
+}
+
+TEST(EntryPointInfo, DirectlyReferencedViaLoad) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 12
+    OpDecorate %var Binding 8
+)" + ShaderTypes() + R"(
+    %var = OpVariable UniformConstant %float
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    %value = OpLoad %float %var
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 8}})}));
 }
 
 }  // anonymous namespace

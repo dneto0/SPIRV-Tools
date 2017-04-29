@@ -24,6 +24,7 @@
 #include "entry_point_info.h"
 
 #include <cassert>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -31,6 +32,8 @@
 #include "spirv-tools/libspirv.h"
 
 using spirv_example::EntryPointInfo;
+using spirv_example::Descriptor;
+using spirv_example::Descriptors;
 
 namespace {
 
@@ -40,24 +43,80 @@ std::string StringFromWords(const uint32_t* words) {
   return reinterpret_cast<const char*>(words);
 }
 
-// holds accumulated information about all entry points in the module.
+// Returns true if the given storage class can contain variables that have
+// descriptors.
+bool IsStorageClassWithDescriptors(SpvStorageClass sc) {
+  switch (sc) {
+    case SpvStorageClassUniformConstant:
+    case SpvStorageClassUniform:
+    case SpvStorageClassStorageBuffer:
+      return true;
+    default:
+      break;
+  }
+  return false;
+}
+
+// A collector holds accumulated information about all entry points in the
+// module.
 class Collector {
  public:
   explicit Collector(std::vector<EntryPointInfo>* entry_points)
-      : entry_points_(entry_points) {
+      : entry_points_(entry_points), current_function_ {
     entry_points_->clear();
   }
 
   spv_result_t HandleInstruction(const spv_parsed_instruction_t& inst) {
-    if (inst.opcode == SpvOpEntryPoint) {
-      entry_points_->push_back(EntryPointInfo{StringFromWords(inst.words + 3)});
+    switch (inst.opcode) {
+      case SpvOpEntryPoint:
+        entry_points_->push_back(
+            EntryPointInfo{StringFromWords(inst.words + 3)});
+        break;
+      case SpvOpDecoration: {
+        const auto target = inst.words[1];
+        if (inst.num_words == 4) {
+          const auto number = inst.words[3];
+          switch (inst.words[2]) {
+            case SpvDecorationDescriptorSet:
+            case SpvDecorationBinding:
+              SaveDescriptorInfo(target, inst.words[2], number);
+              break;
+            default:
+              break;
+          }
+        }
+      } break;
+      default:
     }
     return SPV_SUCCESS;
+  }
+
+  // Saves the fact about the descriptor set or binding information for
+  // the given target id.
+  void SaveDescriptor(uint32_t target, SpvDecoration decoration,
+                      uint32_t number) {
+    auto d& = descriptors_[target];
+    if (decoration == SpvDecorationDescriptorSet) {
+      d.set = number;
+    } else if (decoration == SpvDecorationBinding) {
+      d.binding = number;
+    }
   }
 
  private:
   // The accumulated entry point information.
   std::vector<EntryPointInfo>* entry_points_;
+
+  // The Id of the current function.  We have seen its OpFunction instruction
+  // but not its OpFunctionEnd instruction.  This is 0 when there is no current
+  // function.
+  uint32_t current_function_;
+
+  // Maps the Id of a function to the directly referenced descriptors.
+  std::unordered_map<uint32_t, Descriptors> uses_;
+
+  // Maps an Id to the descriptor decorated on it.
+  std::unordered_map<uint32_t, Descriptors> descriptors_;
 };
 
 // Binary parser handle-instruction callback.

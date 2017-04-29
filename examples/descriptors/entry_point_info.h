@@ -28,6 +28,7 @@ struct Descriptor {
   uint32_t set;      // The DescriptorSet decoration.
   uint32_t binding;  // The Binding decoration.
 };
+using Descriptors = std::set<Descriptor>;
 
 inline bool operator<(const Descriptor& lhs, const Descriptor& rhs) {
   return lhs.set < rhs.set || (lhs.set == rhs.set && lhs.binding < lhs.binding);
@@ -42,15 +43,15 @@ inline bool operator==(const Descriptor& lhs, const Descriptor& rhs) {
 class EntryPointInfo {
  public:
   EntryPointInfo() {}
-  explicit EntryPointInfo(const std::string& _name) : name_(_name) {}
-  explicit EntryPointInfo(const char* _name) : name_(std::string(_name)) {}
+  EntryPointInfo(const std::string& _name, const Descriptors& descriptors = {})
+      : name_(_name), descriptors_(descriptors) {}
 
   const std::string& name() const { return name_; }
  private:
   // The name of the entry point.
   std::string name_;
   // The set of descriptors for variables referenced by this entry point.
-  std::set<Descriptor> descriptors_;
+  Descriptors descriptors_;
 };
 
 inline bool operator==(const EntryPointInfo& lhs, const EntryPointInfo& rhs) {
