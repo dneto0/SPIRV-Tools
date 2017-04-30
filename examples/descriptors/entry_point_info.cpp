@@ -87,6 +87,9 @@ class Collector {
       case SpvOpLoad:
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
+      case SpvOpStore:
+        SaveReferenceIfDescriptor(inst.words[1]);
+        break;
       default:
         break;
     }

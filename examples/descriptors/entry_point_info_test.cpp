@@ -193,4 +193,23 @@ TEST(EntryPointInfo, DirectlyReferencedViaLoad) {
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 8}})}));
 }
 
+TEST(EntryPointInfo, DirectlyReferencedViaStore) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 12
+    OpDecorate %var Binding 18
+)" + ShaderTypesAndConstants() + R"(
+    %var = OpVariable %float_ptr UniformConstant
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    OpStore %var %zerof
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 18}})}));
+}
+
 }  // anonymous namespace
