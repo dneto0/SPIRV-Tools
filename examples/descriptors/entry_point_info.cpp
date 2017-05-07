@@ -13,8 +13,6 @@
 // limitations under the License.
 
 // TODO(dneto): Capture variables referenced in entry point function itself
-// TODO(dneto): Cover mentions in: OpVariable
-// TODO(dneto): Cover mentions in: OpAccessChain, OpInBoundsAccessChain
 // TODO(dneto): Cover mentions in: OpFunctionParamter
 // TODO(dneto): Cover mentions in: OpImageTexelPointer
 // TODO(dneto): Cover mentions in: OpCopyObject
@@ -91,6 +89,7 @@ class Collector {
         SaveReferenceIfDescriptor(inst.words[1]);
         break;
       case SpvOpAccessChain:
+      case SpvOpInBoundsAccessChain:
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
       default:

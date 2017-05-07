@@ -259,4 +259,24 @@ TEST(EntryPointInfo, DirectlyReferencedViaAccessChain) {
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{9, 8}})}));
 }
 
+TEST(EntryPointInfo, DirectlyReferencedViaInBoundsAccessChain) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 3
+    OpDecorate %var Binding 2
+)" + ShaderTypesAndConstants() +
+                         R"(
+    %var = OpVariable %struct_float_uni_ptr Uniform
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    %p = OpInBoundsAccessChain %float_uni_ptr %var %zero
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{3, 2}})}));
+}
+
 }  // anonymous namespace
