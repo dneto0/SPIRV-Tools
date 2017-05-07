@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(dneto): Variables referenced in call stack.
+// TODO(dneto): Find indirect decorations via DecorationGroup
 
 #include "entry_point_info.h"
 
 #include <cassert>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -51,7 +52,7 @@ class Collector {
   spv_result_t HandleInstruction(const spv_parsed_instruction_t& inst) {
     switch (inst.opcode) {
       case SpvOpEntryPoint:
-	entry_point_map_[inst.words[2]] = entry_points_->size();
+        entry_point_map_[inst.words[2]] = entry_points_->size();
         entry_points_->push_back(
             EntryPointInfo{StringFromWords(inst.words + 3)});
         break;
@@ -72,11 +73,9 @@ class Collector {
       case SpvOpFunction:
         current_function_ = inst.words[2];
         break;
-      case SpvOpFunctionEnd: {
-        (*entry_points_)[entry_point_map_[current_function_]].descriptors() =
-            uses_[current_function_];
+      case SpvOpFunctionEnd:
         current_function_ = 0;
-      } break;
+        break;
       case SpvOpLoad:
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
@@ -90,6 +89,9 @@ class Collector {
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
       case SpvOpFunctionCall: {
+        // First record the callee.
+        call_graph_[current_function_].insert(inst.words[3]);
+        // Now see if we're passing a descriptor value into the callee.
         // For a function call, each operand is a single word.  The call
         // operands start at word 4.
         for (unsigned i = 4; i < inst.num_words; i++) {
@@ -159,14 +161,30 @@ class Collector {
         uses_[current_function_].insert(where->second);
       }
     }
- } 
+  }
+
+  // Traverse the call graph for each entry point to load its descriptors
+  // set.  Assumes we've already traversed the module to collect the
+  // descriptor uses.
+  void LoadDescriptorsForEntryPoints();
 
  private:
+  // Accumulate the descriptor uses in the call graph rooted at fn but skipping
+  // any functions listed in |visited|.  Also updates |visited| to indicate what
+  // functions it visited.  Assumes we've already traversed the module to
+  // collect the descriptor uses.
+  void AccumulateDescriptorsBeneathFunction(
+      uint32_t fn, Descriptors* descriptors,
+      std::unordered_set<uint32_t>* visited);
+
   // The accumulated entry point information.
   std::vector<EntryPointInfo>* entry_points_;
 
   // Map the Id of an entry point to its index in entry_points_.
   std::unordered_map<uint32_t, uint32_t> entry_point_map_;
+
+  // Maps a function Id to the set Ids of functions it calls.
+  std::unordered_map<uint32_t, std::set<uint32_t>> call_graph_;
 
   // The Id of the current function. A function is current if we have seen its
   // OpFunction instruction but not its OpFunctionEnd instruction.  This is 0
@@ -179,6 +197,35 @@ class Collector {
   // Maps an Id to the descriptor decorated on it.
   std::unordered_map<uint32_t, Descriptor> id_descriptor_map_;
 };
+
+void Collector::LoadDescriptorsForEntryPoints() {
+  for (const auto& entry_point_map_iter : entry_point_map_) {
+    const uint32_t entry_point_id = entry_point_map_iter.first;
+    const uint32_t index = entry_point_map_iter.second;
+    auto& descriptors = (*entry_points_)[index].descriptors();
+
+    std::unordered_set<uint32_t> visited;
+    AccumulateDescriptorsBeneathFunction(entry_point_id, &descriptors,
+                                         &visited);
+  }
+}
+
+void Collector::AccumulateDescriptorsBeneathFunction(
+    uint32_t fn, Descriptors* descriptors,
+    std::unordered_set<uint32_t>* visited) {
+  if (0 == visited->count(fn)) {
+    visited->insert(fn);
+    for (const auto& d : uses_[fn]) {
+      descriptors->insert(d);
+    }
+    auto callees_iter = call_graph_.find(fn);
+    if (callees_iter != call_graph_.end()) {
+      for (auto callee : callees_iter->second) {
+        AccumulateDescriptorsBeneathFunction(callee, descriptors, visited);
+      }
+    }
+  }
+}
 
 // Binary parser handle-instruction callback.
 // Captures necessary information from an instruction, assuming they are
@@ -201,6 +248,8 @@ spv_result_t GetEntryPointInfo(const spv_const_context context,
   Collector collector(entry_points);
   auto status = spvBinaryParse(context, &collector, words, num_words, nullptr,
                                HandleInstruction, diagnostic);
+
+  collector.LoadDescriptorsForEntryPoints();
   return status;
 }
 

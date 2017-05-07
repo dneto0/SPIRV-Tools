@@ -225,7 +225,8 @@ TEST(EntryPointInfo, DirectlyReferencedViaLoad) {
 )");
   EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
                                            binary.size(), &infos, nullptr));
-  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 8}})}));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 8}})}))
+      << Dump(infos);
 }
 
 TEST(EntryPointInfo, DirectlyReferencedViaStore) {
@@ -456,5 +457,59 @@ TEST(EntryPointInfo, CaptureSeveralVariables) {
       Eq(Infos{EntryPointInfo("main", Descriptors{{12, 18}, {13, 14}})}));
 }
 
+TEST(EntryPointInfo, FalseReferenceInUncalledFunction) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 12
+    OpDecorate %var Binding 8
+)" + ShaderTypesAndConstants() + R"(
+    %var = OpVariable %float_ptr UniformConstant
+
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    OpReturn
+    OpFunctionEnd
+
+    %callee = OpFunction %void None %void_fn
+    %callee_entry = OpLabel
+    %v = OpLoad %float %var
+    OpReturn
+    OpFunctionEnd
+
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{})}));
+}
+
+TEST(EntryPointInfo, ReferencedViaLoadInCallee) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 12
+    OpDecorate %var Binding 8
+)" + ShaderTypesAndConstants() + R"(
+    %var = OpVariable %float_ptr UniformConstant
+
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    %v0 = OpFunctionCall %void %callee
+    %v1 = OpFunctionCall %void %callee
+    %v2 = OpFunctionCall %void %callee
+    OpReturn
+    OpFunctionEnd
+
+    %callee = OpFunction %void None %void_fn
+    %callee_entry = OpLabel
+    %v = OpLoad %float %var
+    OpReturn
+    OpFunctionEnd
+
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 8}})}));
+}
 
 }  // anonymous namespace
