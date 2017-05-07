@@ -362,15 +362,16 @@ struct DescriptorsCase {
   Descriptors expected;
 };
 
-using AtomicDescriptorsTest = ::testing::TestWithParam<DescriptorsCase>;
+using DescriptorsTest = ::testing::TestWithParam<DescriptorsCase>;
 
-TEST_P(AtomicDescriptorsTest, Samples) {
+TEST_P(DescriptorsTest, Samples) {
   Infos infos;
   auto binary = Assemble(ShaderPreamble() + " OpDecorate %var DescriptorSet " +
                          GetParam().set + " OpDecorate %var Binding " +
                          GetParam().binding + " " + ShaderTypesAndConstants() +
                          R"(
     %var = OpVariable %int_sb_ptr StorageBuffer
+    %var2 = OpVariable %int_sb_ptr StorageBuffer
 
     %main = OpFunction %void None %void_fn
     %entry = OpLabel
@@ -387,7 +388,7 @@ TEST_P(AtomicDescriptorsTest, Samples) {
 }
 
 INSTANTIATE_TEST_CASE_P(
-    DirectlyReferencedViaAtomicOperation, AtomicDescriptorsTest,
+    DirectlyReferencedViaAtomicOperation, DescriptorsTest,
     ::testing::ValuesIn(std::vector<DescriptorsCase>{
         {"3", "4", "%v = OpAtomicLoad %int %var %one %zero", {{3, 4}}},
         {"9", "7", "OpAtomicStore %var %one %zero %zero", {{9, 7}}},
@@ -421,5 +422,39 @@ INSTANTIATE_TEST_CASE_P(
          {{25, 26}}},
         {"27", "28", "%v = OpAtomicFlagClear %var %one %zero", {{27, 28}}},
     }), );
+
+INSTANTIATE_TEST_CASE_P(
+    DirectlyReferencedViaCopy, DescriptorsTest,
+    ::testing::ValuesIn(std::vector<DescriptorsCase>{
+        {"99", "100", "%v = OpCopyObject %int_sb_ptr %var", {{99, 100}}},
+        {"101", "102", "OpCopyMemory %var %var2", {{101, 102}}},
+        {"103", "104", "OpCopyMemory %var2 %var", {{103, 104}}},
+        {"103", "104", "OpCopyMemory %var2 %var", {{103, 104}}},
+    }), );
+
+TEST(EntryPointInfo, CaptureSeveralVariables) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 12
+    OpDecorate %var Binding 18
+    OpDecorate %var2 DescriptorSet 13
+    OpDecorate %var2 Binding 14
+)" + ShaderTypesAndConstants() + R"(
+    %var = OpVariable %float_ptr UniformConstant
+    %var2 = OpVariable %float_ptr UniformConstant
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    OpCopyMemory %var %var2
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(
+      infos,
+      Eq(Infos{EntryPointInfo("main", Descriptors{{12, 18}, {13, 14}})}));
+}
+
 
 }  // anonymous namespace

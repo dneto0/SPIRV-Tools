@@ -130,6 +130,13 @@ class Collector {
       case SpvOpAtomicFlagClear:
         SaveReferenceIfDescriptor(inst.words[1]);
         break;
+      case SpvOpCopyObject:
+        SaveReferenceIfDescriptor(inst.words[3]);
+        break;
+      case SpvOpCopyMemory:
+        SaveReferenceIfDescriptor(inst.words[1]);
+        SaveReferenceIfDescriptor(inst.words[2]);
+        break;
       default:
         break;
     }
