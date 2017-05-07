@@ -101,6 +101,9 @@ class Collector {
           SaveReferenceIfDescriptor(inst.words[i]);
         }
       } break;
+      case SpvOpImageTexelPointer:
+        SaveReferenceIfDescriptor(inst.words[3]);
+        break;
       default:
         break;
     }
