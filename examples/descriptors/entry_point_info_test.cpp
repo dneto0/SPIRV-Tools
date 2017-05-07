@@ -34,24 +34,26 @@ using Infos = std::vector<EntryPointInfo>;
 using Words = std::vector<uint32_t>;
 
 
-// Emits a string representation of an EntryPointInfo object to the given
-// stream.
-void Dump(const EntryPointInfo& e, std::ostream* out) {
-  *out << "  EntryPoint(\"" << e.name() << "\":";
+// Returns a string representation of an EntryPointInfo object.
+std::string Dump(const EntryPointInfo& e) {
+  std::ostringstream out;
+  out << "  EntryPoint(\"" << e.name() << "\":";
   for (const auto& d : e.descriptors()) {
-    *out << " (" << d.set << ", " << d.binding << ")";
+    out << " (" << d.set << ", " << d.binding << ")";
   }
-  *out << std::endl;
+  out << std::endl;
+  return out.str();
 }
 
-// Emits a string representation of a vector of EntryPointInfo objects to the
+// Returns a string representation of a vector of EntryPointInfo objects to the
 // given stream.
-void Dump(const Infos& infos, std::ostream* out) {
-  *out << "[" << std::endl;
+std::string Dump(const Infos& infos) {
+  std::ostringstream out;
+  out << "[" << std::endl;
   for (const auto& e : infos) {
-    Dump(e, out);
-    *out << "]" << std::endl;
+    out << Dump(e) << "]" << std::endl;
   }
+  return out.str();
 }
 
 // A scoped SPIRV-Tools context object.
@@ -188,6 +190,7 @@ std::string ShaderTypesAndConstants() {
     %float = OpTypeFloat 32
     %zerof = OpConstantNull %float
     %zero = OpConstantNull %zero
+    %one = OpConstant %int 1
     %float_unic_ptr = OpTypePointer UniformConstant %float
     %float_uni_ptr = OpTypePointer Uniform %float
     %float_sb_ptr = OpTypePointer StorageBuffer %float
@@ -202,6 +205,7 @@ std::string ShaderTypesAndConstants() {
     %float_image_ptr = OpTypePointer Image %float
     %image_of_float = OpTypeImage %float 1D 0 0 0 2 R32f
     %image_of_float_unic_ptr = OpTypePointer UniformConstant %image_of_float
+    %int_sb_ptr = OpTypePointer StorageBuffer %int
 )";
 }
 
@@ -350,25 +354,72 @@ TEST(EntryPointInfo, DirectlyReferencedViaFunctionCall) {
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{1, 3}})}));
 }
 
-TEST(EntryPointInfo, DirectlyReferencedViaImageTexelPointer) {
+// A test case for finding descriptors via atomic operations.
+struct DescriptorsCase {
+  std::string set;
+  std::string binding;
+  std::string assembly;
+  Descriptors expected;
+};
+
+using AtomicDescriptorsTest = ::testing::TestWithParam<DescriptorsCase>;
+
+TEST_P(AtomicDescriptorsTest, Samples) {
   Infos infos;
-  auto binary = Assemble(ShaderPreamble() +
+  auto binary = Assemble(ShaderPreamble() + " OpDecorate %var DescriptorSet " +
+                         GetParam().set + " OpDecorate %var Binding " +
+                         GetParam().binding + " " + ShaderTypesAndConstants() +
                          R"(
-    OpDecorate %var DescriptorSet 7
-    OpDecorate %var Binding 4
-)" + ShaderTypesAndConstants() +
-                         R"(
-    %var = OpVariable %image_of_float_unic_ptr UniformConstant
+    %var = OpVariable %int_sb_ptr StorageBuffer
 
     %main = OpFunction %void None %void_fn
     %entry = OpLabel
-    %p = OpImageTexelPointer %image_of_float %var %zero %zero
+)" + GetParam().assembly +
+
+                         R"(
     OpReturn
     OpFunctionEnd
 )");
   EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
-                                           binary.size(), &infos, nullptr));
-  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{7, 4}})}));
+                                           binary.size(), &infos, nullptr))
+      << Dump(infos);
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", GetParam().expected)}));
 }
+
+INSTANTIATE_TEST_CASE_P(
+    DirectlyReferencedViaAtomicOperation, AtomicDescriptorsTest,
+    ::testing::ValuesIn(std::vector<DescriptorsCase>{
+        {"3", "4", "%v = OpAtomicLoad %int %var %one %zero", {{3, 4}}},
+        {"9", "7", "OpAtomicStore %var %one %zero %zero", {{9, 7}}},
+        {"100",
+         "92",
+         "%v = OpAtomicExchange %int %var %one %zero %zero",
+         {{100, 92}}},
+        {"100",
+         "92",
+         "%v = OpAtomicCompareExchange %int %var %one %zero %zero %zero %zero",
+         {{100, 92}}},
+        {"10",
+         "9",
+         "%v = OpAtomicCompareExchangeWeak %int %var %one %zero %zero %zero "
+         "%zero",
+         {{10, 9}}},
+        {"5", "6", "%v = OpAtomicIIncrement %int %var %one %zero", {{5, 6}}},
+        {"6", "7", "%v = OpAtomicIDecrement %int %var %one %zero", {{6, 7}}},
+        {"6", "9", "%v = OpAtomicIAdd %int %var %one %zero %one", {{6, 9}}},
+        {"16", "19", "%v = OpAtomicISub %int %var %one %zero %one", {{16, 19}}},
+        {"11", "12", "%v = OpAtomicSMin %int %var %one %zero %one", {{11, 12}}},
+        {"13", "14", "%v = OpAtomicUMin %int %var %one %zero %one", {{13, 14}}},
+        {"15", "16", "%v = OpAtomicSMax %int %var %one %zero %one", {{15, 16}}},
+        {"17", "18", "%v = OpAtomicUMax %int %var %one %zero %one", {{17, 18}}},
+        {"19", "20", "%v = OpAtomicAnd %int %var %one %zero %one", {{19, 20}}},
+        {"21", "22", "%v = OpAtomicOr %int %var %one %zero %one", {{21, 22}}},
+        {"23", "24", "%v = OpAtomicXor %int %var %one %zero %one", {{23, 24}}},
+        {"25",
+         "26",
+         "%v = OpAtomicFlagTestAndSet %int %var %one %zero",
+         {{25, 26}}},
+        {"27", "28", "%v = OpAtomicFlagClear %var %one %zero", {{27, 28}}},
+    }), );
 
 }  // anonymous namespace

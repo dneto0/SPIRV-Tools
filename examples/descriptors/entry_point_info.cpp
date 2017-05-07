@@ -104,6 +104,32 @@ class Collector {
       case SpvOpImageTexelPointer:
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
+      case SpvOpAtomicLoad:
+        SaveReferenceIfDescriptor(inst.words[3]);
+        break;
+      case SpvOpAtomicStore:
+        SaveReferenceIfDescriptor(inst.words[1]);
+        break;
+      case SpvOpAtomicExchange:
+      case SpvOpAtomicCompareExchange:
+      case SpvOpAtomicCompareExchangeWeak:
+      case SpvOpAtomicIIncrement:
+      case SpvOpAtomicIDecrement:
+      case SpvOpAtomicIAdd:
+      case SpvOpAtomicISub:
+      case SpvOpAtomicSMin:
+      case SpvOpAtomicUMin:
+      case SpvOpAtomicSMax:
+      case SpvOpAtomicUMax:
+      case SpvOpAtomicAnd:
+      case SpvOpAtomicOr:
+      case SpvOpAtomicXor:
+      case SpvOpAtomicFlagTestAndSet:
+        SaveReferenceIfDescriptor(inst.words[3]);
+        break;
+      case SpvOpAtomicFlagClear:
+        SaveReferenceIfDescriptor(inst.words[1]);
+        break;
       default:
         break;
     }
