@@ -14,6 +14,7 @@
 
 #include "gmock/gmock.h"
 
+#include <ostream>
 #include <sstream>
 #include <vector>
 
@@ -31,6 +32,27 @@ using testing::Eq;
 
 using Infos = std::vector<EntryPointInfo>;
 using Words = std::vector<uint32_t>;
+
+
+// Emits a string representation of an EntryPointInfo object to the given
+// stream.
+void Dump(const EntryPointInfo& e, std::ostream* out) {
+  *out << "  EntryPoint(\"" << e.name() << "\":";
+  for (const auto& d : e.descriptors()) {
+    *out << " (" << d.set << ", " << d.binding << ")";
+  }
+  *out << std::endl;
+}
+
+// Emits a string representation of a vector of EntryPointInfo objects to the
+// given stream.
+void Dump(const Infos& infos, std::ostream* out) {
+  *out << "[" << std::endl;
+  for (const auto& e : infos) {
+    Dump(e, out);
+    *out << "]" << std::endl;
+  }
+}
 
 // A scoped SPIRV-Tools context object.
 class Context {
@@ -162,8 +184,10 @@ std::string ShaderTypesAndConstants() {
   return R"(
     %void = OpTypeVoid
     %void_fn = OpTypeFunction %void
+    %int = OpTypeInt 32 0
     %float = OpTypeFloat 32
     %zerof = OpConstantNull %float
+    %zero = OpConstantNull %zero
     %float_unic_ptr = OpTypePointer UniformConstant %float
     %float_uni_ptr = OpTypePointer Uniform %float
     %float_sb_ptr = OpTypePointer StorageBuffer %float
@@ -171,6 +195,9 @@ std::string ShaderTypesAndConstants() {
     %float_arr_unic_ptr = OpTypePointer UniformConstant %float_arr
     %float_arr_uni_ptr = OpTypePointer Uniform %float_arr
     %float_arr_sb_ptr = OpTypePointer StorageBuffer %float_arr
+    %struct_float = OpTypeStruct %float
+    %struct_float_uni_ptr = OpTypePointer Uniform %struct_float
+    %struct_float_sb_ptr = OpTypePointer StorageBuffer %struct_float
 )";
 }
 
@@ -210,6 +237,26 @@ TEST(EntryPointInfo, DirectlyReferencedViaStore) {
   EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
                                            binary.size(), &infos, nullptr));
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{12, 18}})}));
+}
+
+TEST(EntryPointInfo, DirectlyReferencedViaAccessChain) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 9
+    OpDecorate %var Binding 8
+)" + ShaderTypesAndConstants() +
+                         R"(
+    %var = OpVariable %struct_float_uni_ptr Uniform
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    %p = OpAccessChain %float_uni_ptr %var %zero
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{9, 8}})}));
 }
 
 }  // anonymous namespace
