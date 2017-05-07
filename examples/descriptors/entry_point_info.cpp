@@ -94,6 +94,13 @@ class Collector {
       case SpvOpInBoundsPtrAccessChain:
         SaveReferenceIfDescriptor(inst.words[3]);
         break;
+      case SpvOpFunctionCall: {
+        // For a function call, each operand is a single word.  The call
+        // operands start at word 4.
+        for (unsigned i = 4; i < inst.num_words; i++) {
+          SaveReferenceIfDescriptor(inst.words[i]);
+        }
+      } break;
       default:
         break;
     }

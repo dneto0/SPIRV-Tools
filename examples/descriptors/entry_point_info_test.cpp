@@ -198,6 +198,7 @@ std::string ShaderTypesAndConstants() {
     %struct_float = OpTypeStruct %float
     %struct_float_uni_ptr = OpTypePointer Uniform %struct_float
     %struct_float_sb_ptr = OpTypePointer StorageBuffer %struct_float
+    %void_float_struct_float_sb_ptr_fn = OpTypeFunction %void %float %struct_float_sb_ptr
 )";
 }
 
@@ -317,6 +318,33 @@ TEST(EntryPointInfo, DirectlyReferencedViaInBoundsPtrAccessChain) {
   EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
                                            binary.size(), &infos, nullptr));
   EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{9, 8}})}));
+}
+
+TEST(EntryPointInfo, DirectlyReferencedViaFunctionCall) {
+  Infos infos;
+  auto binary = Assemble(ShaderPreamble() +
+                         R"(
+    OpDecorate %var DescriptorSet 1
+    OpDecorate %var Binding 3
+)" + ShaderTypesAndConstants() +
+                         R"(
+    %var = OpVariable %struct_float_sb_ptr StorageBuffer
+
+    %callee = OpFunction %void None %void_float_struct_float_sb_ptr_fn
+    %callee_param0 = OpFunctionParameter %struct_float_sb_ptr_fn
+    %callee_param1 = OpFunctionParameter %struct_float_sb_ptr_fn
+    %callee_entry = OpLabel
+    OpReturn
+
+    %main = OpFunction %void None %void_fn
+    %entry = OpLabel
+    %res = OpFunctionCall %void %callee %zerof %var
+    OpReturn
+    OpFunctionEnd
+)");
+  EXPECT_EQ(SPV_SUCCESS, GetEntryPointInfo(Context(), binary.data(),
+                                           binary.size(), &infos, nullptr));
+  EXPECT_THAT(infos, Eq(Infos{EntryPointInfo("main", Descriptors{{1, 3}})}));
 }
 
 }  // anonymous namespace
