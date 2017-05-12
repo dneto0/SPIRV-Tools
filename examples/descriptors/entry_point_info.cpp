@@ -52,7 +52,7 @@ class Collector {
   spv_result_t HandleInstruction(const spv_parsed_instruction_t& inst) {
     switch (inst.opcode) {
       case SpvOpEntryPoint:
-        entry_point_map_[inst.words[2]] = entry_points_->size();
+        entry_point_map_[inst.words[2]] = uint32_t(entry_points_->size());
         entry_points_->push_back(
             EntryPointInfo{StringFromWords(inst.words + 3)});
         break;

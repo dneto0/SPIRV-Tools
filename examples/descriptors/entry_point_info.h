@@ -43,8 +43,8 @@ inline bool operator==(const Descriptor& lhs, const Descriptor& rhs) {
 class EntryPointInfo {
  public:
   EntryPointInfo() {}
-  EntryPointInfo(const std::string& _name, const Descriptors& descriptors = {})
-      : name_(_name), descriptors_(descriptors) {}
+  EntryPointInfo(const std::string& _name, const Descriptors& ds = {})
+      : name_(_name), descriptors_(ds) {}
 
   // Accessors
   const std::string& name() const { return name_; }
