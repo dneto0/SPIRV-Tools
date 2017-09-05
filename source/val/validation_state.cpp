@@ -133,6 +133,7 @@ ValidationState_t::ValidationState_t(const spv_const_context ctx,
                                      const spv_const_validator_options opt)
     : context_(ctx),
       options_(opt),
+      current_parsed_instruction_(nullptr),
       instruction_counter_(0),
       unresolved_forward_ids_{},
       operand_names_{},
@@ -244,9 +245,31 @@ bool ValidationState_t::IsOpcodeInCurrentLayoutSection(SpvOp op) {
 }
 
 DiagnosticStream ValidationState_t::diag(spv_result_t error_code) const {
-  return libspirv::DiagnosticStream(
+  libspirv::DiagnosticStream diagnostic(
       {0, 0, static_cast<size_t>(instruction_counter_)}, context_->consumer,
       error_code);
+
+  if (current_parsed_instruction_) {
+    // Disassemble the instruction as a note at the end of the diagnotic.
+    std::vector<uint32_t> binary{header_[0], header_[1], header_[2], header_[3],
+                                 header_[4]};
+    std::vector<uint32_t> words{current_parsed_instruction_->words,
+                                current_parsed_instruction_->words +
+                                    current_parsed_instruction_->num_words};
+
+    binary.insert(binary.end(), words.begin(), words.end());
+    spv_text text;
+    spvBinaryToText(context_, binary.data(), binary.size(),
+                    SPV_BINARY_TO_TEXT_OPTION_NO_HEADER |
+                        SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES,
+                    &text, nullptr);
+    if (text->str) {
+      diagnostic << libspirv::MakeNote("\n") << libspirv::MakeNote(text->str);
+    }
+    spvTextDestroy(text);
+  }
+
+  return diagnostic;
 }
 
 deque<Function>& ValidationState_t::functions() { return module_functions_; }

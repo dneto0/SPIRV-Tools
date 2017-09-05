@@ -79,6 +79,11 @@ class ValidationState_t {
   /// Returns the command line options
   spv_const_validator_options options() const { return options_; }
 
+  /// Sets the current instruction.
+  void SetCurrentInstruction(const spv_parsed_instruction_t* inst) {
+    current_parsed_instruction_ = inst;
+  }
+
   /// Forward declares the id in the module
   spv_result_t ForwardDeclareId(uint32_t id);
 
@@ -145,6 +150,16 @@ class ValidationState_t {
   /// Returns true if called after a label instruction but before a branch
   /// instruction
   bool in_block() const;
+
+  // Save the header words.
+  void RegisterHeader(uint32_t magic, uint32_t version, uint32_t generator,
+                      uint32_t id_bound, uint32_t reserved) {
+    header_[0] = magic;
+    header_[1] = version;
+    header_[2] = generator;
+    header_[3] = id_bound;
+    header_[4] = reserved;
+  }
 
   /// Registers the given <id> as an Entry Point.
   void RegisterEntryPointId(const uint32_t id) {
@@ -372,6 +387,13 @@ class ValidationState_t {
 
   /// Stores the Validator command line options. Must be a valid options object.
   const spv_const_validator_options options_;
+
+  // The SPIR-V header words.
+  uint32_t header_[5];
+
+  // The instruction currently being processed by ProcessInstruction.
+  // Null otherwise.
+  const spv_parsed_instruction_t* current_parsed_instruction_;
 
   /// Tracks the number of instructions evaluated by the validator
   int instruction_counter_;
