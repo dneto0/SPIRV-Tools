@@ -88,6 +88,7 @@ DiagnosticStream::~DiagnosticStream() {
       default:
         break;
     }
+    stream_ << notes_.str();
     consumer_(level, "input", position_, stream_.str().c_str());
   }
 }

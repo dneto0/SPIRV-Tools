@@ -22,8 +22,25 @@
 
 namespace libspirv {
 
+// A DiagnosticNote is a helper that lets us accumulate text that should
+// go at the end of the diagnostic stream.
+template <typename T>
+struct DiagnosticNote {
+  const T& value;
+};
+
+// Returns a DiagnosticNote.  This is a convenience function to allow
+// you to make a DiagnosticNote without explicitly writing the template
+// parameter.
+template <typename T>
+DiagnosticNote<T> MakeNote(const T& value) {
+  return {value};
+}
+
 // A DiagnosticStream remembers the current position of the input and an error
 // code, and captures diagnostic messages via the left-shift operator.
+// It can also accumulate notes that will be emitted after other regular
+// captured material.
 // If the error code is not SPV_FAILED_MATCH, then captured messages are
 // emitted during the destructor.
 class DiagnosticStream {
@@ -33,11 +50,18 @@ class DiagnosticStream {
                    spv_result_t error)
       : position_(position), consumer_(consumer), error_(error) {}
 
+  DiagnosticStream(const DiagnosticStream& other) = delete;
   DiagnosticStream(DiagnosticStream&& other)
-      : stream_(other.stream_.str()),
+      : stream_(),
+        notes_(),
         position_(other.position_),
         consumer_(other.consumer_),
-        error_(other.error_) {}
+        error_(other.error_) {
+    stream_ << other.stream_.str();
+    notes_ << other.notes_.str();
+    // Prevent the other object from emitting messages on destruction.
+    other.error_ = SPV_FAILED_MATCH;
+  }
 
   ~DiagnosticStream();
 
@@ -48,11 +72,21 @@ class DiagnosticStream {
     return *this;
   }
 
+  // Adds the given value to the notes that should appear at the end.
+  template <typename T>
+  DiagnosticStream& operator<<(const DiagnosticNote<T>& val) {
+    notes_ << val.value;
+    return *this;
+  }
+
   // Conversion operator to spv_result, returning the error code.
   operator spv_result_t() { return error_; }
 
  private:
+  // Accumulated text to be emitted.
   std::stringstream stream_;
+  // Text that should be emitted after the stream_ contents.
+  std::stringstream notes_;
   spv_position_t position_;
   const spvtools::MessageConsumer& consumer_;  // Message consumer callback.
   spv_result_t error_;

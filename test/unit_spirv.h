@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include <iomanip>
+#include <sstream>
 #include <vector>
 
 #include "source/assembly_grammar.h"
@@ -30,11 +31,11 @@
 #include "source/text_handler.h"
 #include "source/validate.h"
 #include "spirv-tools/libspirv.h"
+#include "spirv-tools/libspirv.hpp"
 
 #include <gtest/gtest.h>
 
 #ifdef __ANDROID__
-#include <sstream>
 namespace std {
 template <typename T>
 std::string to_string(const T& val) {
@@ -221,6 +222,32 @@ inline std::vector<SpvCapability> ElementsIn(
   capabilities.ForEach([&result](SpvCapability c) { result.push_back(c); });
   return result;
 }
+
+
+// A class with a consumer() method that returns a MessageConsumer
+// that accumulates messages on an internal string stream.
+class MessageSink {
+ public:
+  MessageSink()
+      : out_(),
+        consumer_([this](spv_message_level_t level, const char* source,
+                         const spv_position_t& pos, const char* message) {
+          this->out_ << int(level) << ":" << source << ":"
+                     << "{" << pos.line << " " << pos.column << " " << pos.index
+                     << "}: " << message << "\n";
+        }) {}
+
+  // Returns a MessageConsumer that appends the given message to the stored
+  // output stream.
+  spvtools::MessageConsumer& consumer() { return consumer_; }
+
+  // Returns the accumulated string so far.
+  std::string str() const { return out_.str(); }
+
+ private:
+  std::ostringstream out_;
+  spvtools::MessageConsumer consumer_;
+};
 
 }  // namespace spvtest
 #endif  // LIBSPIRV_TEST_UNITSPIRV_H_

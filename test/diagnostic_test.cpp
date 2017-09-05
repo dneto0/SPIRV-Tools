@@ -14,9 +14,12 @@
 
 #include "unit_spirv.h"
 
+#include <gmock/gmock.h>
+
 namespace {
 
 using libspirv::DiagnosticStream;
+using ::testing::Eq;
 
 // Returns a newly created diagnostic value.
 spv_diagnostic MakeValidDiagnostic() {
@@ -73,6 +76,43 @@ TEST(DiagnosticStream, ConversionToResultType) {
   // Check conversion via constructor.
   EXPECT_EQ(SPV_FAILED_MATCH,
             spv_result_t(DiagnosticStream({}, nullptr, SPV_FAILED_MATCH)));
+}
+
+TEST(DiagnosticStream, EmitInfoToConsumer) {
+  spvtest::MessageSink sink;
+  {
+    DiagnosticStream d({1, 2, 3}, sink.consumer(), SPV_SUCCESS);
+    d << "hello world!";
+  }
+
+  EXPECT_THAT(sink.str(), Eq("4:input:{1 2 3}: hello world!\n"));
+}
+
+TEST(DiagnosticStream, EmitInfoAndNotesToConsumer) {
+  // Notes accumulate at the end of the diagnostic stream.
+  spvtest::MessageSink sink;
+  {
+    DiagnosticStream d({1, 2, 3}, sink.consumer(), SPV_SUCCESS);
+    d << "hello world!" << libspirv::MakeNote("\nwith note: ")
+      << libspirv::MakeNote(12) << " again";
+  }
+
+  EXPECT_THAT(sink.str(), Eq("4:input:{1 2 3}: hello world! again\nwith note: 12\n"));
+}
+
+TEST(DiagnosticStream, TextAndNotesSurviveMoving) {
+  spvtest::MessageSink sink;
+  {
+    DiagnosticStream first({1, 2, 3}, sink.consumer(), SPV_SUCCESS);
+    first << "hello world!" << libspirv::MakeNote("\nwith note: ")
+          << libspirv::MakeNote(12) << " again";
+    DiagnosticStream second(std::move(first));
+    second << "(second)";
+  }
+
+  EXPECT_THAT(
+      sink.str(),
+      Eq("4:input:{1 2 3}: hello world! again(second)\nwith note: 12\n"));
 }
 
 }  // anonymous namespace
