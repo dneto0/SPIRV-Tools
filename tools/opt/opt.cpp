@@ -117,6 +117,8 @@ Options:
                call tree functions.
   --strength-reduction
                Replaces instructions with equivalent and less expensive ones.
+  --wip-rba
+               Work in progress.
   -h, --help   
                Print this help.
   --version    
@@ -215,6 +217,9 @@ int main(int argc, char** argv) {
         optimizer.RegisterPass(CreateFlattenDecorationPass());
       } else if (0 == strcmp(cur_arg, "--compact-ids")) {
         optimizer.RegisterPass(CreateCompactIdsPass());
+      } else if (0 == strcmp(cur_arg, "--wip-rba")) {
+        // TODO(dneto): Give this a proper name and description.
+        optimizer.RegisterPass(CreateGraphicsRobustAccessPass());
       } else if ('\0' == cur_arg[1]) {
         // Setting a filename of "-" to indicate stdin.
         if (!in_file) {
