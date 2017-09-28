@@ -94,6 +94,9 @@ class Module {
 
   inline uint32_t id_bound() const { return header_.bound; }
 
+  // Returns the memory model instruction. Every valid module has exactly one.
+  const Instruction* GetMemoryModel() const { return memory_model_.get(); }
+
   // Iterators for debug instructions (excluding OpLine & OpNoLine) contained in
   // this module.
   inline inst_iterator debug_begin();
