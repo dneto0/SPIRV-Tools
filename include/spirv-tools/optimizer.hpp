@@ -383,6 +383,12 @@ Optimizer::PassToken CreateAggressiveDCEPass();
 // The pass remaps result ids to a compact and gapless range starting from %1.
 Optimizer::PassToken CreateCompactIdsPass();
 
+// Creates a graphics robust access pass.
+//
+// This pass injects code to clamp accesses to resources, implementing
+// guarantees satisfying Vulkan's robustBufferAccess rules.
+Optimizer::PassToken CreateGraphicsRobustAccessPass();
+
 }  // namespace spvtools
 
 #endif  // SPIRV_TOOLS_OPTIMIZER_HPP_

@@ -204,4 +204,9 @@ Optimizer::PassToken CreateCompactIdsPass() {
       MakeUnique<opt::CompactIdsPass>());
 }
 
+Optimizer::PassToken CreateGraphicsRobustAccessPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::GraphicsRobustAccessPass>());
+}
+
 }  // namespace spvtools
