@@ -18,14 +18,41 @@
 #include "module.h"
 #include "pass.h"
 
+#include "diagnostic.h"
+
 namespace spvtools {
 namespace opt {
 
 // See optimizer.hpp for documentation.
 class GraphicsRobustAccessPass : public Pass {
  public:
+  GraphicsRobustAccessPass();
   const char* name() const override { return "graphics-robust-access"; }
   Status Process(ir::Module*) override;
+
+ private:
+  // Records failure for the current module, and returns a stream
+  // that can be used to provide user error information to the message
+  // consumer.
+  libspirv::DiagnosticStream Fail();
+
+  // Transform the current module, if possible. Failure and modification
+  // status is recorded in the |_| member. On failure, error information is
+  // posted to the message consumer.  The return value has no significance.
+  spv_result_t ProcessCurrentModule();
+
+  // State required for the current state.
+  struct PerModuleState {
+    PerModuleState(ir::Module* m) : module(m), modified(false), failed(false) {}
+
+    // The module currently being processed.
+    ir::Module* module;
+    // This pass modified the module.
+    bool modified;
+    // True if there is an error processing the current module, e.g. if
+    // preconditions are not met.
+    bool failed;
+  } _;
 };
 
 }  // namespace opt
