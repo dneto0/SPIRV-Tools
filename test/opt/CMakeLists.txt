@@ -53,6 +53,11 @@ add_spvtools_unittest(TARGET pass_freeze_spec_const
   LIBS SPIRV-Tools-opt
 )
 
+add_spvtools_unittest(TARGET pass_graphics_robust_access
+  SRCS graphics_robust_access_test.cpp pass_utils.cpp
+  LIBS SPIRV-Tools-opt
+)
+
 add_spvtools_unittest(TARGET pass_block_merge
   SRCS block_merge_test.cpp pass_utils.cpp
   LIBS SPIRV-Tools-opt
