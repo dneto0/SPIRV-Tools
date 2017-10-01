@@ -79,14 +79,21 @@
 #include "graphics_robust_access_pass.h"
 
 #include <algorithm>
+#include <cstring>
 #include <functional>
+#include <initializer_list>
+#include <utility>
 
 #include "spirv/1.2/spirv.h"
 
 #include "diagnostic.h"
 
 #include "function.h"
+#include "make_unique.h"
 #include "module.h"
+#include "pass.h"
+
+using spvtools::MakeUnique;
 
 namespace spvtools {
 namespace opt {
@@ -102,7 +109,6 @@ libspirv::DiagnosticStream GraphicsRobustAccessPass::Fail() {
 }
 
 spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
-
   if (_.module->HasCapability(SpvCapabilityVariablePointers))
     return Fail() << "Can't process module with VariablePointers capability";
 
@@ -122,12 +128,153 @@ spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
   return SPV_SUCCESS;
 }
 
-bool GraphicsRobustAccessPass::ProcessAFunction(ir::Function*) {
-  return false;
+bool GraphicsRobustAccessPass::ProcessAFunction(ir::Function* function) {
+  // Ensure that all pointers computed inside a function are within bounds.
+  for (auto& block : *function) {
+    for (auto& inst : block) {
+      switch (inst.opcode()) {
+        case SpvOpAccessChain:
+        case SpvOpInBoundsAccessChain:
+          ClampIndicesForAccessChain(&inst);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  return _.modified;
+}
+
+void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
+    ir::Instruction* inst) {
+  const uint32_t num_operands = inst->NumOperands();
+  const uint32_t first_index = 3;
+  for (uint32_t idx = first_index; idx < num_operands; ++idx) {
+  }
+}
+
+uint32_t GraphicsRobustAccessPass::GetGlslInsts() {
+  if (_.glsl_insts_id == 0) {
+    // This string serves double-duty as raw data for a string and for a vector
+    // of 32-bit words
+    const char glsl[] = "GLSL.std.450\0\0\0\0";
+    const size_t glsl_str_byte_len = 16;
+    // Use an existing import if we can.
+    for (auto& inst : _.module->ext_inst_imports()) {
+      const auto& name_words = inst.GetInOperand(0).words;
+      if (0 == std::strncmp(reinterpret_cast<const char*>(name_words.data()),
+                            glsl, glsl_str_byte_len)) {
+        _.glsl_insts_id = inst.result_id();
+      }
+    }
+    if (_.glsl_insts_id == 0) {
+      // Make a new import.
+      _.modified = true;
+      _.glsl_insts_id = _.next_id++;
+      std::vector<uint32_t> words(4);
+      std::memcpy(words.data(), glsl, glsl_str_byte_len);
+      auto import_inst = MakeUnique<ir::Instruction>(
+          SpvOpExtInstImport, 0, _.glsl_insts_id,
+          std::initializer_list<ir::Operand>{
+              ir::Operand{SPV_OPERAND_TYPE_LITERAL_STRING, std::move(words)}});
+      _.module->AddExtInstImport(std::move(import_inst));
+    }
+  }
+  return _.glsl_insts_id;
+}
+
+uint32_t GraphicsRobustAccessPass::GetUintType(uint32_t width) {
+  uint32_t& result = _.uint_type[width];
+  if (result == 0) {
+    // Find a prexisting type definition if it exists.
+    for (auto& inst : _.module->types_values()) {
+      if (inst.opcode() == SpvOpTypeInt &&
+          inst.GetSingleWordOperand(1) == width &&
+          inst.GetSingleWordOperand(2) == 0) {
+        result = inst.result_id();
+      }
+      assert(result);
+    }
+    if (result == 0) {
+      // Make a new declaration.
+      _.modified = true;
+      result = _.next_id++;
+      auto int_type_inst = MakeUnique<ir::Instruction>(
+          SpvOpTypeInt, 0, result,
+          std::initializer_list<ir::Operand>{
+              ir::Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {width}},
+              ir::Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {0}}});
+      _.module->AddType(std::move(int_type_inst));
+      assert(result);
+
+      _.width_of_uint_type[result] = width;
+    }
+  }
+  return result;
+}
+
+uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id, uint64_t value) {
+  auto type_value = std::make_pair(type_id, value);
+  auto where = _.uint_value.find(type_value);
+  uint32_t result = 0;
+  if (where == _.uint_value.end()) {
+      // Make a new constant.
+      _.modified = true;
+      result = _.next_id++;
+      // Construct the raw words.  Assume the type is at most 64 bits
+      // wide.
+      std::vector<uint32_t> words;
+      words.push_back(static_cast<uint32_t>(value & 0xffff));
+      if (_.width_of_uint_type[type_id] > 32) {
+        words.push_back(static_cast<uint32_t>(value >> 32));
+      }
+      auto constant_inst = MakeUnique<ir::Instruction>(
+          SpvOpConstant, 0, result,
+          std::initializer_list<ir::Operand>{
+              ir::Operand{SPV_OPERAND_TYPE_TYPED_LITERAL_NUMBER, words},
+          });
+      _.module->AddGlobalValue(std::move(constant_inst));
+  } else {
+    result = where->second;
+  }
+  assert(result);
+  return result;
+}
+
+void GraphicsRobustAccessPass::LoadUintTypeWidths() {
+  for (auto& inst : _.module->types_values()) {
+    if (inst.opcode() == SpvOpTypeInt && inst.GetSingleWordOperand(2) == 0) {
+      const auto width = inst.GetSingleWordOperand(1);
+      if (width <= 64) {
+        _.width_of_uint_type[inst.result_id()] = width;
+      }
+    }
+  }
+}
+
+void GraphicsRobustAccessPass::LoadUintValues() {
+  for (auto& inst : _.module->types_values()) {
+    if (inst.opcode() == SpvOpConstant) {
+      const uint32_t type_id = inst.type_id();
+      auto uint_type_iter = _.width_of_uint_type.find(type_id);
+      if (uint_type_iter != _.width_of_uint_type.end()) {
+        // This is an unsigned integer constant of up to 64 bits.
+        // Copy its bits into |value|.
+        uint64_t value = 0;
+        const ir::Operand& value_operand = inst.GetInOperand(0);
+        assert(value_operand.words.size() <= 2);
+        std::memcpy(&value, value_operand.words.data(),
+                    value_operand.words.size() * sizeof(uint32_t));
+        _.uint_value[std::make_pair(type_id, value)] = inst.result_id();
+      }
+    }
+  }
 }
 
 Pass::Status GraphicsRobustAccessPass::Process(ir::Module* module) {
   _ = PerModuleState(module);
+  LoadUintTypeWidths();
+  LoadUintValues();
 
   ProcessCurrentModule();
 
@@ -138,7 +285,7 @@ Pass::Status GraphicsRobustAccessPass::Process(ir::Module* module) {
   _ = PerModuleState(nullptr);
 
   return result;
-}  // namespace opt
+}
 
 }  // namespace opt
 }  // namespace spvtools
