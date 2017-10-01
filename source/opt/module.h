@@ -94,6 +94,12 @@ class Module {
 
   inline uint32_t id_bound() const { return header_.bound; }
 
+  // Iterators for extended instruction import instructions in this module.
+  inline inst_iterator ext_inst_imports_begin();
+  inline inst_iterator ext_inst_imports_end();
+  inline IteratorRange<inst_iterator> ext_inst_imports();
+  inline IteratorRange<const_inst_iterator> ext_inst_imports() const;
+
   // Returns the memory model instruction. Every valid module has exactly one.
   const Instruction* GetMemoryModel() const { return memory_model_.get(); }
 
@@ -213,6 +219,21 @@ inline void Module::AddGlobalValue(std::unique_ptr<Instruction> v) {
 
 inline void Module::AddFunction(std::unique_ptr<Function> f) {
   functions_.emplace_back(std::move(f));
+}
+
+inline Module::inst_iterator Module::ext_inst_imports_begin() {
+  return inst_iterator(&ext_inst_imports_, ext_inst_imports_.begin());
+}
+inline Module::inst_iterator Module::ext_inst_imports_end() {
+  return inst_iterator(&ext_inst_imports_, ext_inst_imports_.end());
+}
+
+inline IteratorRange<Module::inst_iterator> Module::ext_inst_imports() {
+  return make_range(ext_inst_imports_);
+}
+
+inline IteratorRange<Module::const_inst_iterator> Module::ext_inst_imports() const {
+  return make_const_range(ext_inst_imports_);
 }
 
 inline Module::inst_iterator Module::debug_begin() {
