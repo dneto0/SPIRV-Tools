@@ -78,6 +78,8 @@
 
 #include "graphics_robust_access_pass.h"
 
+#include <algorithm>
+
 #include "spirv/1.2/spirv.h"
 
 #include "diagnostic.h"
@@ -90,24 +92,23 @@ GraphicsRobustAccessPass::GraphicsRobustAccessPass() : _(nullptr) {}
 libspirv::DiagnosticStream GraphicsRobustAccessPass::Fail() {
   _.failed = true;
   // We don't really have a position, and we'll ignore the result.
-  return libspirv::DiagnosticStream({}, consumer(), SPV_ERROR_INVALID_BINARY);
+  return std::move(
+      libspirv::DiagnosticStream({}, consumer(), SPV_ERROR_INVALID_BINARY)
+      << name() << ": ");
 }
 
 spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
 
   if (_.module->HasCapability(SpvCapabilityVariablePointers))
-    return Fail() << name()
-                  << ": Can't process module with VariablePointers capability";
+    return Fail() << "Can't process module with VariablePointers capability";
 
   {
     const auto addressing_model =
         _.module->GetMemoryModel()->GetSingleWordOperand(0);
     if (addressing_model != SpvAddressingModelLogical)
-      return Fail()
-             << name()
-             << ": Can't process module with addressing model other than "
-                "Logical.  Found "
-             << int(addressing_model);
+      return Fail() << "Can't process module with addressing model other than "
+                       "Logical.  Found "
+                    << int(addressing_model);
   }
 
   // Need something here.  It's the price we pay for easier failure paths.
