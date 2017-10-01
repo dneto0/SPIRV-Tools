@@ -79,10 +79,14 @@
 #include "graphics_robust_access_pass.h"
 
 #include <algorithm>
+#include <functional>
 
 #include "spirv/1.2/spirv.h"
 
 #include "diagnostic.h"
+
+#include "function.h"
+#include "module.h"
 
 namespace spvtools {
 namespace opt {
@@ -111,8 +115,15 @@ spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
                     << int(addressing_model);
   }
 
+  ProcessFunction fn = [this](ir::Function* f) { return ProcessAFunction(f); };
+  _.modified |= ProcessReachableCallTree(fn, _.module);
+
   // Need something here.  It's the price we pay for easier failure paths.
   return SPV_SUCCESS;
+}
+
+bool GraphicsRobustAccessPass::ProcessAFunction(ir::Function*) {
+  return false;
 }
 
 Pass::Status GraphicsRobustAccessPass::Process(ir::Module* module) {

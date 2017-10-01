@@ -41,6 +41,10 @@ class GraphicsRobustAccessPass : public Pass {
   // posted to the message consumer.  The return value has no significance.
   spv_result_t ProcessCurrentModule();
 
+  // Process the given function.  Updates the state value |_|.  Returns true
+  // if the module was modified.
+  bool ProcessAFunction(ir::Function*);
+
   // State required for the current state.
   struct PerModuleState {
     PerModuleState(ir::Module* m) : module(m), modified(false), failed(false) {}
