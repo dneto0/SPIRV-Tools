@@ -84,9 +84,8 @@
 #include <initializer_list>
 #include <utility>
 
-#include <iostream>
-
 #include "spirv/1.2/spirv.h"
+#include "spirv/1.0/GLSL.std.450.h"
 
 #include "diagnostic.h"
 
@@ -128,6 +127,7 @@ spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
 
   ProcessFunction fn = [this](ir::Function* f) { return ProcessAFunction(f); };
   _.modified |= ProcessReachableCallTree(fn, _.module);
+  _.module->SetIdBound(_.next_id);
 
   // Need something here.  It's the price we pay for easier failure paths.
   return SPV_SUCCESS;
@@ -155,13 +155,11 @@ void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
     BasicBlock::iterator* inst_iter_ptr) {
   Instruction& inst = **inst_iter_ptr;
   const uint32_t num_operands = inst.NumOperands();
-  std::cout << "Access chain " << inst.result_id() << std::endl;
 
-  uint32_t ptr_id = inst.GetSingleWordOperand(3);
+  uint32_t ptr_id = inst.GetSingleWordInOperand(0);
   const Instruction* ptr_inst = GetDef(ptr_id);
   const Instruction* ptr_type = GetDef(ptr_inst->type_id());
-  Instruction* pointee_type = GetDef(ptr_type->GetSingleWordOperand(3));
-  const uint32_t first_index = 4;
+  Instruction* pointee_type = GetDef(ptr_type->GetSingleWordInOperand(1));
 
   auto clamp_index = [&inst_iter_ptr, &inst, this](uint32_t operand_index,
                                                    uint32_t old_value_id,
@@ -180,7 +178,7 @@ void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
 
   // Walk the indices, replacing indices with a clamped value, and updating
   // the pointee_type.
-  for (uint32_t idx = first_index; idx < num_operands; ++idx) {
+  for (uint32_t idx = 3; idx < num_operands; ++idx) {
     const uint32_t index_id = inst.GetSingleWordOperand(idx);
     const Instruction* index_inst = GetDef(index_id);
     uint32_t index_type_id = index_inst->type_id();
@@ -229,16 +227,17 @@ void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
                  << index_inst->opcode() << " instead.";
           return;
         }
-        auto which_type_iter = _.width_of_uint_type.find(index_inst->type_id());
-        if (which_type_iter == _.width_of_uint_type.end()) {
-          Fail()
-              << "Struct index with id " << index_inst->result_id()
-              << " in access chain " << inst.result_id() << " is of type "
-              << index_inst->type_id()
-              << " which is not an unsigned integer type of less than 64 bits";
+        if (_.width_of_uint_type.find(index_inst->type_id()) ==
+                _.width_of_uint_type.end() &&
+            _.width_of_int_type.find(index_inst->type_id()) ==
+                _.width_of_int_type.end()) {
+          Fail() << "Struct index with id " << index_inst->result_id()
+                 << " in access chain " << inst.result_id() << " is of type "
+                 << index_inst->type_id()
+                 << " which is not a signed or unsigned integer type of less "
+                    "than 64 bits";
           return;
         }
-
         const uint32_t num_members = pointee_type->NumInOperands();
         const auto index_value = GetUintValueFromConstant(*index_inst);
         if (index_value >= num_members) {
@@ -342,7 +341,7 @@ uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id,
       words.push_back(static_cast<uint32_t>(value >> 32));
     }
     auto constant_inst = MakeUnique<Instruction>(
-        SpvOpConstant, 0, result,
+        SpvOpConstant, type_id, result,
         std::initializer_list<Operand>{
             Operand{SPV_OPERAND_TYPE_TYPED_LITERAL_NUMBER, words},
         });
@@ -357,8 +356,10 @@ uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id,
 uint64_t GraphicsRobustAccessPass::GetUintValueFromConstant(
     const Instruction& inst) {
   assert(inst.opcode() == SpvOpConstant);
-  assert(_.width_of_uint_type.find(inst.type_id()) !=
-         _.width_of_uint_type.end());
+  assert(
+      (_.width_of_uint_type.find(inst.type_id()) !=
+       _.width_of_uint_type.end()) ||
+      (_.width_of_int_type.find(inst.type_id()) != _.width_of_int_type.end()));
 
   const auto& value_words = inst.GetInOperand(0).words;
   assert(1 <= value_words.size());
@@ -373,21 +374,28 @@ uint64_t GraphicsRobustAccessPass::GetUintValueFromConstant(
 std::unique_ptr<Instruction> GraphicsRobustAccessPass::MakeUmaxInst(
     uint32_t id0, uint32_t id1) {
   _.modified = true;
-  auto umax_inst =
-      MakeUnique<Instruction>(SpvOpExtInst, GetDef(id0)->type_id(), _.next_id++,
-                              std::initializer_list<Operand>{
-                                  Operand{SPV_OPERAND_TYPE_ID, {id0}},
-                                  Operand{SPV_OPERAND_TYPE_ID, {id1}},
-                              });
+  auto umax_inst = MakeUnique<Instruction>(
+      SpvOpExtInst, GetDef(id0)->type_id(), _.next_id++,
+      std::initializer_list<Operand>{
+          Operand{SPV_OPERAND_TYPE_ID, {GetGlslInsts()}},
+          Operand{SPV_OPERAND_TYPE_EXTENSION_INSTRUCTION_NUMBER,
+                  {GLSLstd450UMax}},
+          Operand{SPV_OPERAND_TYPE_ID, {id0}},
+          Operand{SPV_OPERAND_TYPE_ID, {id1}},
+      });
   return umax_inst;
 }
 
-void GraphicsRobustAccessPass::LoadUintTypeWidths() {
+void GraphicsRobustAccessPass::LoadIntTypeWidths() {
   for (auto& inst : _.module->types_values()) {
-    if (inst.opcode() == SpvOpTypeInt && inst.GetSingleWordOperand(2) == 0) {
+    if (inst.opcode() == SpvOpTypeInt) {
       const auto width = inst.GetSingleWordOperand(1);
       if (width <= 64) {
-        _.width_of_uint_type[inst.result_id()] = width;
+        if (inst.GetSingleWordOperand(2)) {
+          _.width_of_int_type[inst.result_id()] = width;
+        } else {
+          _.width_of_uint_type[inst.result_id()] = width;
+        }
       }
     }
   }
@@ -414,7 +422,7 @@ void GraphicsRobustAccessPass::LoadUintValues() {
 
 Pass::Status GraphicsRobustAccessPass::Process(ir::Module* module) {
   _ = PerModuleState(module);
-  LoadUintTypeWidths();
+  LoadIntTypeWidths();
   LoadUintValues();
 
   ProcessCurrentModule();

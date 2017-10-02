@@ -81,9 +81,9 @@ class GraphicsRobustAccessPass : public Pass {
   // integer type.
   std::unique_ptr<ir::Instruction> MakeUmaxInst(uint32_t id0, uint32_t id1);
 
-  // Record the width of each unsigned integer type, by id.  Only handles widths
-  // up to 64 bits.
-  void LoadUintTypeWidths();
+  // Record the width of each signed or unsigned integer type, by id.  Only
+  // handles widths up to 64 bits.
+  void LoadIntTypeWidths();
   // Record the id of all unsigned integer constants up to 64 bits wide.  This
   // is only valid to call if unsigned int types have been recorded.
   void LoadUintValues();
@@ -120,8 +120,11 @@ class GraphicsRobustAccessPass : public Pass {
     // Only handles widts up to 64 bits.
     std::unordered_map<uint32_t, uint32_t> uint_type = {};
     // Maps a type id of an unsigned integer type to its width.
-    // Only handles widts up to 64 bits.
+    // Only handles widths up to 64 bits.
     std::unordered_map<uint32_t, uint32_t> width_of_uint_type = {};
+    // Maps a type id of an signed integer type to its width.
+    // Only handles widths up to 64 bits.
+    std::unordered_map<uint32_t, uint32_t> width_of_int_type = {};
     // Maps an unsigned integer value of a given type Id to the Id of a constant
     // with that value.  The pair is specified as (type id, value).
     // Only handles widts up to 64 bits.
