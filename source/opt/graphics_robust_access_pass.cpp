@@ -84,6 +84,8 @@
 #include <initializer_list>
 #include <utility>
 
+#include <iostream>
+
 #include "spirv/1.2/spirv.h"
 
 #include "diagnostic.h"
@@ -153,6 +155,7 @@ void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
     BasicBlock::iterator* inst_iter_ptr) {
   Instruction& inst = **inst_iter_ptr;
   const uint32_t num_operands = inst.NumOperands();
+  std::cout << "Access chain " << inst.result_id() << std::endl;
 
   uint32_t ptr_id = inst.GetSingleWordOperand(3);
   const Instruction* ptr_inst = GetDef(ptr_id);
@@ -353,7 +356,7 @@ uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id,
 
 uint64_t GraphicsRobustAccessPass::GetUintValueFromConstant(
     const Instruction& inst) {
-  assert(inst.opcode() == OpConstant);
+  assert(inst.opcode() == SpvOpConstant);
   assert(_.width_of_uint_type.find(inst.type_id()) !=
          _.width_of_uint_type.end());
 
