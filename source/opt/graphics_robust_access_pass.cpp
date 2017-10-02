@@ -61,20 +61,27 @@
 //
 // The strategy is:
 //
-//WIP:
-//TODO:
-//
-//  - Validate that pointers are only used by the instructions as above.
-//    (Or rely on an external validator?)
-//
 //  - Clamp indices contributing to address calculations.
 //    The valid range depends on the targeted type at each index,
 //    and sometimes based queries on the object itself.
 //
-//  - Assume exhaustive inlining has occured, so function calls are not
+//TODO:
+//  - Handle OpTypeArray where the array size is an op spec constant.
+//    Need to calculate the limit as op spec constant by subtracting 1.
+//
+//  - Handle OpTypeRuntimeArray
+//    Need to track pointer back to original resource, so we can query
+//    the runtime array size.
+//
+//  - Validate that pointers are only used by the instructions as above.
+//    (Or rely on an external validator?)
+//
+//  - Assumes exhaustive inlining has occured, so function calls are not
 //    accesses.
 //
 //  - Handle pass through of pointers via OpCopyObject
+//
+//  - Handle OpCopyMemory
 
 #include "graphics_robust_access_pass.h"
 
