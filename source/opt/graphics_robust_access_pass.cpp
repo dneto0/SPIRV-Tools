@@ -93,10 +93,13 @@
 #include "module.h"
 #include "pass.h"
 
-using spvtools::MakeUnique;
-
 namespace spvtools {
 namespace opt {
+
+using ir::BasicBlock;
+using ir::Instruction;
+using ir::Operand;
+using spvtools::MakeUnique;
 
 GraphicsRobustAccessPass::GraphicsRobustAccessPass() : _(nullptr) {}
 
@@ -131,11 +134,12 @@ spv_result_t GraphicsRobustAccessPass::ProcessCurrentModule() {
 bool GraphicsRobustAccessPass::ProcessAFunction(ir::Function* function) {
   // Ensure that all pointers computed inside a function are within bounds.
   for (auto& block : *function) {
-    for (auto& inst : block) {
-      switch (inst.opcode()) {
+    for (auto inst_iter = block.begin(); inst_iter != block.end();
+         ++inst_iter) {
+      switch (inst_iter->opcode()) {
         case SpvOpAccessChain:
         case SpvOpInBoundsAccessChain:
-          ClampIndicesForAccessChain(&inst);
+          ClampIndicesForAccessChain(&inst_iter);
           break;
         default:
           break;
@@ -146,10 +150,115 @@ bool GraphicsRobustAccessPass::ProcessAFunction(ir::Function* function) {
 }
 
 void GraphicsRobustAccessPass::ClampIndicesForAccessChain(
-    ir::Instruction* inst) {
-  const uint32_t num_operands = inst->NumOperands();
-  const uint32_t first_index = 3;
+    BasicBlock::iterator* inst_iter_ptr) {
+  Instruction& inst = **inst_iter_ptr;
+  const uint32_t num_operands = inst.NumOperands();
+
+  uint32_t ptr_id = inst.GetSingleWordOperand(3);
+  const Instruction* ptr_inst = GetDef(ptr_id);
+  const Instruction* ptr_type = GetDef(ptr_inst->type_id());
+  Instruction* pointee_type = GetDef(ptr_type->GetSingleWordOperand(3));
+  const uint32_t first_index = 4;
+
+  auto clamp_index = [&inst_iter_ptr, &inst, this](uint32_t operand_index,
+                                                   uint32_t old_value_id,
+                                                   uint32_t max_value_id) {
+    auto umax_inst = MakeUmaxInst(old_value_id, max_value_id);
+
+    // Subtract 2 from the index to account for result id and type id.
+    inst.SetInOperand(operand_index - 2, {umax_inst->result_id()});
+
+    // Insert the new instuction
+    BasicBlock::iterator& inst_iter = *inst_iter_ptr;
+    inst_iter = inst_iter.InsertBefore(std::move(umax_inst));
+    // Get back to the AccessChain instruction.
+    ++inst_iter;
+  };
+
+  // Walk the indices, replacing indices with a clamped value, and updating
+  // the pointee_type.
   for (uint32_t idx = first_index; idx < num_operands; ++idx) {
+    const uint32_t index_id = inst.GetSingleWordOperand(idx);
+    const Instruction* index_inst = GetDef(index_id);
+    uint32_t index_type_id = index_inst->type_id();
+    switch (pointee_type->opcode()) {
+      case SpvOpTypeMatrix:  // Use column count
+      case SpvOpTypeVector:  // Use component count
+      {
+        const uint32_t max_index_value_id = GetUintValue(
+            index_type_id, pointee_type->GetSingleWordOperand(2) - 1);
+        pointee_type = GetDef(pointee_type->GetSingleWordOperand(1));
+        clamp_index(idx, index_id, max_index_value_id);
+      } break;
+
+      case SpvOpTypeArray: {
+        // The array length could be a spec constant.  For now only handle
+        // the case where it's a constant.
+        // TODO(dneto): Handle op-spec constant case.
+        const Instruction* array_len =
+            GetDef(pointee_type->GetSingleWordOperand(2));
+        if (array_len->opcode() != SpvOpConstant) {
+          Fail() << "Array type with id " << array_len->result_id()
+                 << " uses a length which is not an OpConstant.  Found opcode "
+                 << array_len->opcode()
+                 << " instead.  The OpSpecConstant case is not handled yet.";
+          return;
+        }
+        auto which_type_iter = _.width_of_uint_type.find(array_len->type_id());
+        if (which_type_iter == _.width_of_uint_type.end()) {
+          Fail() << "Array length value with id " << array_len->result_id()
+                 << " is of type " << array_len->type_id()
+                 << " which is not an integer type of less than 64 bits";
+          return;
+        }
+        uint64_t len = GetUintValueFromConstant(*array_len);
+        const uint32_t max_index_value_id =
+            GetUintValue(index_type_id, len - 1);
+        pointee_type = GetDef(pointee_type->GetSingleWordOperand(1));
+        clamp_index(idx, index_id, max_index_value_id);
+      } break;
+
+      case SpvOpTypeStruct: {
+        if (index_inst->opcode() != SpvOpConstant) {
+          Fail() << "Struct index with id " << index_inst->result_id()
+                 << " in access chain " << inst.result_id()
+                 << " is not an OpConstant.  Found opcode "
+                 << index_inst->opcode() << " instead.";
+          return;
+        }
+        auto which_type_iter = _.width_of_uint_type.find(index_inst->type_id());
+        if (which_type_iter == _.width_of_uint_type.end()) {
+          Fail()
+              << "Struct index with id " << index_inst->result_id()
+              << " in access chain " << inst.result_id() << " is of type "
+              << index_inst->type_id()
+              << " which is not an unsigned integer type of less than 64 bits";
+          return;
+        }
+
+        const uint32_t num_members = pointee_type->NumInOperands();
+        const auto index_value = GetUintValueFromConstant(*index_inst);
+        if (index_value >= num_members) {
+          Fail() << "In access chain " << inst.result_id()
+                 << ", member index value " << index_value
+                 << " is too large for struct type with id "
+                 << pointee_type->result_id();
+          return;
+        }
+        pointee_type = GetDef(pointee_type->GetSingleWordInOperand(
+            static_cast<uint32_t>(index_value)));
+        // No need to clamp this index.  We just checked that it's valid.
+      } break;
+
+      case SpvOpTypeRuntimeArray:
+        Fail() << " Unhandled runtime array ";
+        pointee_type = GetDef(pointee_type->GetSingleWordOperand(1));
+        return;
+
+      default:
+        Fail() << " Unhandled pointee type with opcode "
+               << pointee_type->opcode();
+    }
   }
 }
 
@@ -173,10 +282,10 @@ uint32_t GraphicsRobustAccessPass::GetGlslInsts() {
       _.glsl_insts_id = _.next_id++;
       std::vector<uint32_t> words(4);
       std::memcpy(words.data(), glsl, glsl_str_byte_len);
-      auto import_inst = MakeUnique<ir::Instruction>(
+      auto import_inst = MakeUnique<Instruction>(
           SpvOpExtInstImport, 0, _.glsl_insts_id,
-          std::initializer_list<ir::Operand>{
-              ir::Operand{SPV_OPERAND_TYPE_LITERAL_STRING, std::move(words)}});
+          std::initializer_list<Operand>{
+              Operand{SPV_OPERAND_TYPE_LITERAL_STRING, std::move(words)}});
       _.module->AddExtInstImport(std::move(import_inst));
     }
   }
@@ -199,11 +308,11 @@ uint32_t GraphicsRobustAccessPass::GetUintType(uint32_t width) {
       // Make a new declaration.
       _.modified = true;
       result = _.next_id++;
-      auto int_type_inst = MakeUnique<ir::Instruction>(
+      auto int_type_inst = MakeUnique<Instruction>(
           SpvOpTypeInt, 0, result,
-          std::initializer_list<ir::Operand>{
-              ir::Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {width}},
-              ir::Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {0}}});
+          std::initializer_list<Operand>{
+              Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {width}},
+              Operand{SPV_OPERAND_TYPE_LITERAL_INTEGER, {0}}});
       _.module->AddType(std::move(int_type_inst));
       assert(result);
 
@@ -213,32 +322,61 @@ uint32_t GraphicsRobustAccessPass::GetUintType(uint32_t width) {
   return result;
 }
 
-uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id, uint64_t value) {
+uint32_t GraphicsRobustAccessPass::GetUintValue(uint32_t type_id,
+                                                uint64_t value) {
   auto type_value = std::make_pair(type_id, value);
   auto where = _.uint_value.find(type_value);
   uint32_t result = 0;
   if (where == _.uint_value.end()) {
-      // Make a new constant.
-      _.modified = true;
-      result = _.next_id++;
-      // Construct the raw words.  Assume the type is at most 64 bits
-      // wide.
-      std::vector<uint32_t> words;
-      words.push_back(static_cast<uint32_t>(value & 0xffff));
-      if (_.width_of_uint_type[type_id] > 32) {
-        words.push_back(static_cast<uint32_t>(value >> 32));
-      }
-      auto constant_inst = MakeUnique<ir::Instruction>(
-          SpvOpConstant, 0, result,
-          std::initializer_list<ir::Operand>{
-              ir::Operand{SPV_OPERAND_TYPE_TYPED_LITERAL_NUMBER, words},
-          });
-      _.module->AddGlobalValue(std::move(constant_inst));
+    // Make a new constant.
+    _.modified = true;
+    result = _.next_id++;
+    // Construct the raw words.  Assume the type is at most 64 bits
+    // wide.
+    std::vector<uint32_t> words;
+    words.push_back(static_cast<uint32_t>(value & 0xffff));
+    if (_.width_of_uint_type[type_id] > 32) {
+      words.push_back(static_cast<uint32_t>(value >> 32));
+    }
+    auto constant_inst = MakeUnique<Instruction>(
+        SpvOpConstant, 0, result,
+        std::initializer_list<Operand>{
+            Operand{SPV_OPERAND_TYPE_TYPED_LITERAL_NUMBER, words},
+        });
+    _.module->AddGlobalValue(std::move(constant_inst));
   } else {
     result = where->second;
   }
   assert(result);
   return result;
+}
+
+uint64_t GraphicsRobustAccessPass::GetUintValueFromConstant(
+    const Instruction& inst) {
+  assert(inst.opcode() == OpConstant);
+  assert(_.width_of_uint_type.find(inst.type_id()) !=
+         _.width_of_uint_type.end());
+
+  const auto& value_words = inst.GetInOperand(0).words;
+  assert(1 <= value_words.size());
+  assert(value_words.size() <= 2);
+  uint64_t result = value_words[0];
+  if (value_words.size() == 2) {
+    result |= (uint64_t(value_words[1]) << 32);
+  }
+  return result;
+}
+
+std::unique_ptr<Instruction> GraphicsRobustAccessPass::MakeUmaxInst(
+    uint32_t id0, uint32_t id1) {
+  _.modified = true;
+  auto umax_inst =
+      MakeUnique<Instruction>(SpvOpExtInst, GetDef(id0)->type_id(), _.next_id++,
+                              std::initializer_list<Operand>{
+                                  Operand{SPV_OPERAND_TYPE_ID, {id0}},
+                                  Operand{SPV_OPERAND_TYPE_ID, {id1}},
+                              });
+  return umax_inst;
 }
 
 void GraphicsRobustAccessPass::LoadUintTypeWidths() {
@@ -261,7 +399,7 @@ void GraphicsRobustAccessPass::LoadUintValues() {
         // This is an unsigned integer constant of up to 64 bits.
         // Copy its bits into |value|.
         uint64_t value = 0;
-        const ir::Operand& value_operand = inst.GetInOperand(0);
+        const Operand& value_operand = inst.GetInOperand(0);
         assert(value_operand.words.size() <= 2);
         std::memcpy(&value, value_operand.words.data(),
                     value_operand.words.size() * sizeof(uint32_t));

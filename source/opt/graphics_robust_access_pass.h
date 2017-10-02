@@ -20,6 +20,7 @@
 
 #include "diagnostic.h"
 
+#include "def_use_manager.h"
 #include "module.h"
 #include "pass.h"
 
@@ -49,9 +50,10 @@ class GraphicsRobustAccessPass : public Pass {
   // if the module was modified.
   bool ProcessAFunction(ir::Function*);
 
-  // Clamps indices in the given address calculation insturction.
-  // Updates _.modified as required.
-  void ClampIndicesForAccessChain(ir::Instruction*);
+  // Clamps indices in address calculation instruction referenced by the
+  // instruction iterator.  Inserts instructions before the given instruction,
+  // and updates the given iterator.  Updates _.modified as required.
+  void ClampIndicesForAccessChain(ir::BasicBlock::iterator* inst_iter);
 
   // Returns the id of the GLSL.std.450 extended instruction set.  Creates it if it
   // does not yet exist.  Updates _.modified as required.
@@ -64,6 +66,20 @@ class GraphicsRobustAccessPass : public Pass {
   // Creates a constant instruction if needed, and updates internal state as
   // required.
   uint32_t GetUintValue(uint32_t type_id, uint64_t value);
+
+  // Get the instruction that defines the given id.
+  ir::Instruction* GetDef(uint32_t id) {
+    return _.def_use_mgr->GetDef(id);
+  }
+
+  // Returns the numeric valid for an OpConstant instruction for an unsigned
+  // integer type of up to 64 bits.
+  uint64_t GetUintValueFromConstant(const ir::Instruction& inst);
+
+  // Returns a new instruction that is a call to the Umax extended instruction
+  // with the two given operands.  The must both be of the same unsigned
+  // integer type.
+  std::unique_ptr<ir::Instruction> MakeUmaxInst(uint32_t id0, uint32_t id1);
 
   // Record the width of each unsigned integer type, by id.  Only handles widths
   // up to 64 bits.
@@ -78,10 +94,17 @@ class GraphicsRobustAccessPass : public Pass {
 
   // State required for the current state.
   struct PerModuleState {
-    PerModuleState(ir::Module* m) : module(m), next_id(m ? m->IdBound() : 0) {}
+    PerModuleState(ir::Module* m)
+        : module(m),
+          def_use_mgr(new analysis::DefUseManager(nullptr, m)),
+          next_id(m ? m->IdBound() : 0) {}
 
     // The module currently being processed.
     ir::Module* module;
+
+    // Definition-and-use tables for the current module.
+    std::unique_ptr<analysis::DefUseManager> def_use_mgr;
+
     // This pass modified the module.
     bool modified = false;
     // True if there is an error processing the current module, e.g. if
