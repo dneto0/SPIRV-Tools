@@ -82,6 +82,8 @@
 //  - Handle pass through of pointers via OpCopyObject
 //
 //  - Handle OpCopyMemory
+//
+//  - Handle OpImageTexelPointer
 
 #include "graphics_robust_access_pass.h"
 
