@@ -380,9 +380,13 @@ class MarkvCodecBase {
 
   // |model| is owned by the caller, must be not null and valid during the
   // lifetime of the codec.
-  explicit MarkvCodecBase(spv_const_context context,
-                          spv_validator_options validator_options,
-                          const MarkvModel* model)
+  explicit MarkvCodecBase(
+      spv_const_context context, spv_validator_options validator_options,
+      const MarkvModel* model,
+      // If decoding, specify the unencoded words of the SPIR-V binary.
+      // otherwise, these can be (nullpttr, 0)
+      const uint32_t* initial_unencoded_words,
+      const size_t initial_unencoded_num_words)
       : validator_options_(validator_options),
         grammar_(context),
         model_(model),
@@ -390,7 +394,9 @@ class MarkvCodecBase {
         mtf_huffman_codecs_(GetMtfHuffmanCodecs()),
         context_(context),
         vstate_(validator_options
-                    ? new ValidationState_t(context, validator_options_)
+                    ? new ValidationState_t(context, validator_options_,
+                                            initial_unencoded_words,
+                                            initial_unencoded_num_words)
                     : nullptr) {}
 
   // Validates a single instruction and updates validation state of the module.
@@ -612,8 +618,10 @@ class MarkvEncoder : public MarkvCodecBase {
   // |model| is owned by the caller, must be not null and valid during the
   // lifetime of MarkvEncoder.
   MarkvEncoder(spv_const_context context, const MarkvCodecOptions& options,
-               const MarkvModel* model)
-      : MarkvCodecBase(context, GetValidatorOptions(options), model),
+               const MarkvModel* model, const uint32_t* unencoded_words,
+               const size_t unencoded_num_words)
+      : MarkvCodecBase(context, GetValidatorOptions(options), model,
+                       unencoded_words, unencoded_num_words),
         options_(options) {
     (void)options_;
   }
@@ -740,7 +748,8 @@ class MarkvDecoder : public MarkvCodecBase {
   // lifetime of MarkvEncoder.
   MarkvDecoder(spv_const_context context, const std::vector<uint8_t>& markv,
                const MarkvCodecOptions& options, const MarkvModel* model)
-      : MarkvCodecBase(context, GetValidatorOptions(options), model),
+      : MarkvCodecBase(context, GetValidatorOptions(options), model, nullptr,
+                       0),
         options_(options),
         reader_(markv) {
     (void)options_;
@@ -2864,7 +2873,8 @@ spv_result_t SpirvToMarkv(
            << "Invalid SPIR-V header.";
   }
 
-  MarkvEncoder encoder(&hijack_context, options, &markv_model);
+  MarkvEncoder encoder(&hijack_context, options, &markv_model, spirv.data(),
+                       spirv.size());
 
   if (log_consumer || debug_consumer) {
     encoder.CreateLogger(log_consumer, debug_consumer);
