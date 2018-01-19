@@ -50,9 +50,9 @@ template <typename T>
 void ValidateBase<T>::CompileSuccessfully(std::string code,
                                           spv_target_env env) {
   spv_diagnostic diagnostic = nullptr;
-  ASSERT_EQ(SPV_SUCCESS,
-            spvTextToBinary(ScopedContext(env).context, code.c_str(),
-                            code.size(), &binary_, &diagnostic))
+  context_ = std::move(ScopedContext(env));
+  ASSERT_EQ(SPV_SUCCESS, spvTextToBinary(context_.context, code.c_str(),
+                                         code.size(), &binary_, &diagnostic))
       << "ERROR: " << diagnostic->error
       << "\nSPIR-V could not be compiled into binary:\n"
       << code;
@@ -68,15 +68,17 @@ void ValidateBase<T>::OverwriteAssembledBinary(uint32_t index, uint32_t word) {
 
 template <typename T>
 spv_result_t ValidateBase<T>::ValidateInstructions(spv_target_env env) {
-  return spvValidateWithOptions(ScopedContext(env).context, options_,
-                                get_const_binary(), &diagnostic_);
+  context_ = std::move(ScopedContext(env));
+  return spvValidateWithOptions(context_.context, options_, get_const_binary(),
+                                &diagnostic_);
 }
 
 template <typename T>
 spv_result_t ValidateBase<T>::ValidateAndRetrieveValidationState(
     spv_target_env env) {
+  context_ = std::move(ScopedContext(env));
   return spvtools::ValidateBinaryAndKeepValidationState(
-      ScopedContext(env).context, options_, get_const_binary()->code,
+      context_.context, options_, get_const_binary()->code,
       get_const_binary()->wordCount, &diagnostic_, &vstate_);
 }
 
