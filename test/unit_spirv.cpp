@@ -20,6 +20,7 @@
 namespace {
 
 using spvtest::MakeVector;
+using spvtest::ScopedContext;
 using ::testing::Eq;
 using Words = std::vector<uint32_t>;
 
@@ -48,6 +49,36 @@ TEST(WordVectorPrintTo, PreservesFlagsAndFill) {
 TEST_P(RoundTripTest, Sample) {
   EXPECT_THAT(EncodeAndDecodeSuccessfully(GetParam()), Eq(GetParam()))
       << GetParam();
+}
+
+// spvtest::ScopedContext
+
+TEST(ScopedContext, DefaultsToUniversal1_0) {
+  ScopedContext ctx;
+  ASSERT_NE(nullptr, ctx.context);
+  EXPECT_EQ(SPV_ENV_UNIVERSAL_1_0, ctx.context->target_env);
+}
+
+TEST(ScopedContext, CanBeSetToUniversal1_2) {
+  ScopedContext ctx(SPV_ENV_UNIVERSAL_1_2);
+  ASSERT_NE(nullptr, ctx.context);
+  EXPECT_EQ(SPV_ENV_UNIVERSAL_1_2, ctx.context->target_env);
+}
+
+TEST(ScopedContext, MoveConstuctorSetsOtherToNull) {
+  ScopedContext ctx(SPV_ENV_UNIVERSAL_1_1);
+  ScopedContext ctx2(std::move(ctx));
+  EXPECT_EQ(nullptr, ctx.context);
+  ASSERT_NE(nullptr, ctx2.context);
+  EXPECT_EQ(SPV_ENV_UNIVERSAL_1_1, ctx2.context->target_env);
+}
+
+TEST(ScopedContext, MoveAssignmentSetsOtherToNull) {
+  ScopedContext ctx(SPV_ENV_VULKAN_1_0);
+  ScopedContext ctx2 = std::move(ctx);
+  EXPECT_EQ(nullptr, ctx.context);
+  ASSERT_NE(nullptr, ctx2.context);
+  EXPECT_EQ(SPV_ENV_VULKAN_1_0, ctx2.context->target_env);
 }
 
 }  // anonymous namespace

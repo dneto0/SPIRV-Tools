@@ -24,6 +24,18 @@ struct ScopedContext {
   ScopedContext(spv_target_env env = SPV_ENV_UNIVERSAL_1_0)
       : context(spvContextCreate(env)) {}
   ~ScopedContext() { spvContextDestroy(context); }
+
+  // No copy constructor or assignment.
+  ScopedContext(ScopedContext&) = delete;
+  ScopedContext& operator=(ScopedContext&) = delete;
+  // Move constructor and assignment.
+  ScopedContext(ScopedContext&& other) { *this = std::move(other); }
+  ScopedContext& operator=(ScopedContext&& other) {
+    context = other.context;
+    other.context = nullptr;
+    return *this;
+  }
+
   spv_context context;
 };
 
