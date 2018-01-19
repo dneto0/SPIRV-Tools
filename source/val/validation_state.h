@@ -102,6 +102,10 @@ class ValidationState_t {
     bool group_ops_reduce_and_scans = false;
   };
 
+  // Constructor.
+  // The |context| and |opt| objects must be valid for the entire lifetime of
+  // this object.  If |words| is not nullptr, then (|words|, |num_words|) refer
+  // to the SPIR-V binary words.
   ValidationState_t(const spv_const_context context,
                     const spv_const_validator_options opt,
                     const uint32_t* words,
@@ -452,8 +456,10 @@ class ValidationState_t {
   bool GetPointerTypeInfo(uint32_t id, uint32_t* data_type,
                           uint32_t* storage_class) const;
 
-  // Returns the disassembly string for the given instruction.
-  std::string Disassemble(const Instruction&);
+  // If this object has a reference to the SPIR-V module, then returns
+  // a string formed from the given prefix, followed by the disassembly of
+  // the given instruction.  Otherwise returns an empty string.
+  std::string Disassemble(const Instruction&, const char* prefix = "") const;
 
  private:
   ValidationState_t(const ValidationState_t&);
@@ -463,7 +469,7 @@ class ValidationState_t {
   /// Stores the Validator command line options. Must be a valid options object.
   const spv_const_validator_options options_;
 
-  /// The SPIR-V binary module we're validating.
+  /// If not (nullptr, 0), this is the SPIR-V binary module we're validating.
   const uint32_t* words_;
   const size_t num_words_;
 

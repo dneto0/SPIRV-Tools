@@ -273,8 +273,7 @@ spv_result_t ValidateBinaryUsingContextAndValidationState(
   // First set up a hook to print the at-fault instruction right after
   // the error message.
   vstate->SetDiagnosticSuffixGenerator([vstate]() {
-    return std::string("\n") +
-           vstate->Disassemble(vstate->ordered_instructions().back());
+    return vstate->Disassemble(vstate->ordered_instructions().back(), "\n");
   });
   if (auto error = spvBinaryParse(&context, vstate, words, num_words, setHeader,
                                   ProcessInstruction, pDiagnostic))

@@ -161,6 +161,14 @@ TEST_F(ValidationStateTest, DisassembleCapabilityInst) {
   EXPECT_THAT(disassembly, Eq("OpCapability Kernel ; 0x00000014"));
 }
 
+TEST_F(ValidationStateTest, DisassembleCapabilityInstWithPrefix) {
+  CompileSuccessfully("OpCapability Kernel");
+  ValidateAndRetrieveValidationState();
+  auto disassembly =
+      vstate_->Disassemble(vstate_->ordered_instructions().front(), "foobar");
+  EXPECT_THAT(disassembly, Eq("foobarOpCapability Kernel ; 0x00000014"));
+}
+
 TEST_F(ValidationStateTest, DisassembleLastInstTypeUintGetsFriendlyName) {
   string spirv =
       string(header) + "%float = OpTypeFloat 32 %a_type = OpTypeInt 32 0";
@@ -169,6 +177,19 @@ TEST_F(ValidationStateTest, DisassembleLastInstTypeUintGetsFriendlyName) {
   auto disassembly =
       vstate_->Disassemble(vstate_->ordered_instructions().back());
   EXPECT_THAT(disassembly, Eq("%uint = OpTypeInt 32 0 ; 0x0000003c"));
+}
+
+TEST(ValidationStateAlone, DisassembleReturnsEmptyWhenNoBinaryProvided) {
+  spvtest::ScopedContext ctx;
+  auto opts = spvValidatorOptionsCreate();
+  libspirv::ValidationState_t vstate(ctx.context, opts, nullptr /* no binary*/,
+                                     0);
+  auto* inst = vstate.RegisterInstruction(spv_parsed_instruction_t{
+      nullptr, 0, SpvOpNop, SPV_EXT_INST_TYPE_NONE, 0, 0, nullptr, 0});
+  EXPECT_THAT(vstate.Disassemble(*inst, "foo"), Eq(std::string()));
+
+  // Don't leak the options.
+  spvValidatorOptionsDestroy(opts);
 }
 
 }  // anonymous namespace

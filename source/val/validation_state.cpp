@@ -777,15 +777,21 @@ bool ValidationState_t::GetConstantValUint64(uint32_t id, uint64_t* val) const {
   return true;
 }
 
-std::string ValidationState_t::Disassemble(const Instruction& inst) {
+std::string ValidationState_t::Disassemble(const Instruction& inst,
+                                           const char* prefix) const {
+  if (!words_) {
+    return "";
+  }
   const spv_parsed_instruction_t& c_inst(inst.c_inst());
   uint32_t disassembly_options = SPV_BINARY_TO_TEXT_OPTION_NO_HEADER |
                                  SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
                                  SPV_BINARY_TO_TEXT_OPTION_SHOW_BYTE_OFFSET;
+  auto* ctx = context();
+  spv_target_env env = ctx->target_env;
 
-  return spvtools::spvInstructionBinaryToText(
-      context()->target_env, c_inst.words, c_inst.num_words, words_, num_words_,
-      disassembly_options);
+  return std::string(prefix) + spvtools::spvInstructionBinaryToText(
+                                   env, c_inst.words, c_inst.num_words, words_,
+                                   num_words_, disassembly_options);
 }
 
 }  // namespace libspirv
