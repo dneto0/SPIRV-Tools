@@ -25,12 +25,7 @@ set VS_VERSION=%2
 set PATH=C:\python36;"C:\Program Files\cmake-3.23.1-windows-x86_64\bin";%PATH%
 
 cd %SRC%
-git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers external/spirv-headers
-git clone https://github.com/google/googletest          external/googletest
-cd external && cd googletest && git reset --hard 1fb1bb23bb8418dc73a5a9a82bbed31dc610fec7 && cd .. && cd ..
-git clone --depth=1 https://github.com/google/effcee              external/effcee
-git clone --depth=1 https://github.com/google/re2                 external/re2
-git clone --depth=1 --branch v3.13.0.1 https://github.com/protocolbuffers/protobuf external/protobuf
+python utils/git-sync-deps
 
 :: #########################################
 :: set up msvc build env
