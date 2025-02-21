@@ -968,6 +968,12 @@ Optimizer::PassToken CreateInvocationInterlockPlacementPass();
 // Creates a pass to add/remove maximal reconvergence execution mode.
 // This pass either adds or removes maximal reconvergence from all entry points.
 Optimizer::PassToken CreateModifyMaximalReconvergencePass(bool add);
+
+// Creates a pass to split combined image+sampler variables into separate
+// image and sampler variables. Binding numbers are doubled for all resources.
+// (The replacement texture gets twice the original binding number, the
+// replacment sampler gets twice the original binding number, plus one.)
+Optimizer::PassToken CreateSplitCombinedImageSamplerPass();
 }  // namespace spvtools
 
 #endif  // INCLUDE_SPIRV_TOOLS_OPTIMIZER_HPP_
