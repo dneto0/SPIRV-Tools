@@ -15,10 +15,12 @@
 #ifndef LIBSPIRV_OPT_SPLIT_COMBINED_IMAGE_SAMPLER_PASS_H_
 #define LIBSPIRV_OPT_SPLIT_COMBINED_IMAGE_SAMPLER_PASS_H_
 
-#include <functional>
-#include <tuple>
+#include <unordered_map>
+#include <vector>
 
-#include "pass.h"
+#include "source/diagnostic.h"
+#include "source/opt/def_use_manager.h"
+#include "source/opt/pass.h"
 
 namespace spvtools {
 namespace opt {
@@ -42,6 +44,40 @@ class SplitCombinedImageSamplerPass : public Pass {
   virtual ~SplitCombinedImageSamplerPass() override = default;
   const char* name() const override { return "split-combined-image-sampler"; }
   Status Process() override;
+
+ private:
+  // Records failure for the current module, and returns a stream
+  // that can be used to provide user error information to the message
+  // consumer.
+  spvtools::DiagnosticStream Fail();
+
+  // Populates obj_ and ordered_objs_;
+  void FindCombinedTextureSamplers();
+
+  struct RemapInfo {
+    uint32_t mem_obj_decl = 0;  // the var or parameter.
+    uint32_t sampled_image_type = 0;
+#if 0
+    uint32_t image_type = 0;
+    uint32_t sampler_type = 0;
+    uint32_t descriptor_set = 0;
+    uint32_t original_set = 0;
+    uint32_t original_binding = 0;
+#endif
+  };
+
+  // Cached from the IRContext. Valid while Process() is running.
+  analysis::DefUseManager* def_use_mgr_ = nullptr;
+
+  // Maps the ID of a memory object declaration for a combined texture+sampler
+  // to remapping information about that object.
+  std::unordered_map<uint32_t, RemapInfo> remap_info_;
+  // The key of objs_ in the order they were added.
+  std::vector<uint32_t> ordered_objs_;
+
+  struct {
+    bool failed = false;
+  } module_status_;
 };
 }  // namespace opt
 }  // namespace spvtools
