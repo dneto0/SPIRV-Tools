@@ -24,7 +24,7 @@ namespace spvtools {
 namespace opt {
 
 Pass::Status SplitCombinedImageSamplerPass::Process() {
-  return Pass::Status::SuccessWithChange;
+  return Pass::Status::SuccessWithoutChange;
 }
 
 }  // namespace opt
