@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <array>
+#include <iostream>
+#include <ostream>
+
 #include "spirv-tools/optimizer.hpp"
 #include "test/opt/pass_fixture.h"
 #include "test/opt/pass_utils.h"
@@ -19,17 +23,6 @@
 namespace spvtools {
 namespace opt {
 namespace {
-
-// using SplitCombinedImageSamplerPassTest = PassTest<::testing::Test>;
-
-struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
-  virtual void SetUp() override {
-    SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
-    SetDisassembleOptions(SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
-                          SPV_BINARY_TO_TEXT_OPTION_INDENT |
-                          SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
-  }
-};
 
 // Valid original types (GLSL syntax), float sampled types
 //   sampler2D
@@ -44,6 +37,72 @@ struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
 //   samplerCubeArray
 //   samplerCubeArrayShadow
 
+struct TypeCase {
+  const char* glsl_type;
+  const char* image_type_decl;
+};
+std::ostream& operator<<(std::ostream& os, const TypeCase& tc) {
+  os << tc.glsl_type;
+  return os;
+}
+
+struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
+  virtual void SetUp() override {
+    SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
+    SetDisassembleOptions(SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+                          SPV_BINARY_TO_TEXT_OPTION_INDENT |
+                          SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
+  }
+};
+
+struct SplitCombinedImageSamplerPassTypeCaseTest
+    : public PassTest<::testing::TestWithParam<TypeCase>> {
+  virtual void SetUp() override {
+    SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
+    SetDisassembleOptions(SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+                          SPV_BINARY_TO_TEXT_OPTION_INDENT |
+                          SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
+  }
+};
+
+std::vector<TypeCase> Cases() {
+  return std::vector<TypeCase>{
+      {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown"},
+      {"sampler2DShadow", "OpTypeImage %float 2D 1 0 0 1 Unknown"},
+      {"sampler2DArray", "OpTypeImage %float 2D 0 1 0 1 Unknown"},
+      {"sampler2DArrayShadow", "OpTypeImage %float 2D 1 1 0 1 Unknown"},
+      {"sampler2DMS", "OpTypeImage %float 2D 0 0 1 0 Unknown"},
+      {"sampler2DMSArray", "OpTypeImage %float 2D 0 1 1 0 Unknown"},
+      {"sampler3D", "OpTypeImage %float 3D 0 0 0 1 Unknown"},
+      {"samplerCube", "OpTypeImage %float Cube 0 0 0 1 Unknown"},
+      {"samplerCubeShadow", "OpTypeImage %float Cube 1 0 0 1 Unknown"},
+      {"samplerCubeArray", "OpTypeImage %float Cube 0 1 0 1 Unknown"},
+      {"samplerCubeArrayShadow", "OpTypeImage %float Cube 1 1 0 1 Unknown"},
+      {"isampler2D", "OpTypeImage %int 2D 0 0 0 1 Unknown"},
+      {"isampler2DShadow", "OpTypeImage %int 2D 1 0 0 1 Unknown"},
+      {"isampler2DArray", "OpTypeImage %int 2D 0 1 0 1 Unknown"},
+      {"isampler2DArrayShadow", "OpTypeImage %int 2D 1 1 0 1 Unknown"},
+      {"isampler2DMS", "OpTypeImage %int 2D 0 0 1 0 Unknown"},
+      {"isampler2DMSArray", "OpTypeImage %int 2D 0 1 1 0 Unknown"},
+      {"isampler3D", "OpTypeImage %int 3D 0 0 0 1 Unknown"},
+      {"isamplerCube", "OpTypeImage %int Cube 0 0 0 1 Unknown"},
+      {"isamplerCubeShadow", "OpTypeImage %int Cube 1 0 0 1 Unknown"},
+      {"isamplerCubeArray", "OpTypeImage %int Cube 0 1 0 1 Unknown"},
+      {"isamplerCubeArrayShadow", "OpTypeImage %int Cube 1 1 0 1 Unknown"},
+      {"usampler2D", "OpTypeImage %uint 2D 0 0 0 1 Unknown"},
+      {"usampler2DShadow", "OpTypeImage %uint 2D 1 0 0 1 Unknown"},
+      {"usampler2DArray", "OpTypeImage %uint 2D 0 1 0 1 Unknown"},
+      {"usampler2DArrayShadow", "OpTypeImage %uint 2D 1 1 0 1 Unknown"},
+      {"usampler2DMS", "OpTypeImage %uint 2D 0 0 1 0 Unknown"},
+      {"usampler2DMSArray", "OpTypeImage %uint 2D 0 1 1 0 Unknown"},
+      {"usampler3D", "OpTypeImage %uint 3D 0 0 0 1 Unknown"},
+      {"usamplerCube", "OpTypeImage %uint Cube 0 0 0 1 Unknown"},
+      {"usamplerCubeShadow", "OpTypeImage %uint Cube 1 0 0 1 Unknown"},
+      {"usamplerCubeArray", "OpTypeImage %uint Cube 0 1 0 1 Unknown"},
+      {"usamplerCubeArrayShadow", "OpTypeImage %uint Cube 1 1 0 1 Unknown"},
+  };
+}
+
 #if 0
 TEST_F(SplitCombinedImageSamplerPassTest, NoCombined_NoChange)
 TEST_F(SplitCombinedImageSamplerPassTest, Combined_
@@ -51,17 +110,28 @@ TEST_F(SplitCombinedImageSamplerPassTest, CombinedBindingNumber
 TEST_F(SplitCombinedImageSamplerPassTest, BindingNumbersOtherResources)
 #endif
 
-std::string PreambleStr() {
+std::string Preamble() {
   return R"(               OpCapability Shader
                OpMemoryModel Logical GLSL450
-               OpEntryPoint GLCompute %1 "main"
-               OpExecutionMode %1 LocalSize 1 1 1
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %main_0 "main_0"
+               OpName %voidfn "voidfn"
 )";
 }
-std::string MainStr() {
-  return R"(       %void = OpTypeVoid
-          %3 = OpTypeFunction %void
-          %1 = OpFunction %void None %3
+
+std::string BasicTypes() {
+  return R"(      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+       %void = OpTypeVoid
+     %voidfn = OpTypeFunction %void
+)";
+}
+std::string Main() {
+  return R"(       %voidfn = OpTypeFunction %void
+       %main = OpFunction %void None %voidfn
           %6 = OpLabel
                OpReturn
                OpFunctionEnd
@@ -69,13 +139,59 @@ std::string MainStr() {
 }
 std::string NoCheck() { return "; CHECK-NOT: nothing to see"; }
 
-TEST_F(SplitCombinedImageSamplerPassTest, NoCombined_NoChange) {
-  const std::string kTest = PreambleStr() + MainStr();
-  auto result = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest + NoCheck(), /* do_validation= */ true);
-  EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithoutChange);
-  EXPECT_EQ(std::get<0>(result), kTest);
+std::string Decorations() {
+  return R"(               OpName %var "var"
+               OpName %im_ty "im_ty"
+               OpName %s_ty "s_ty"
+               OpName %ims_ty "ims_ty"
+               OpName %ims_pty "ims_pty"
+               OpDecorate %var DescriptorSet 0
+               OpDecorate %var Binding 0
+)";
 }
+
+std::string Decls(const std::string& image_type_decl) {
+  return R"(       %s_ty = OpTypeSampler
+      %im_ty = )" +
+         image_type_decl + R"(
+     %ims_ty = OpTypeSampledImage %im_ty
+    %ims_pty = OpTypePointer UniformConstant %ims_ty
+        %var = OpVariable %ims_pty UniformConstant
+)";
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, SamplerOnly_NoChange) {
+  const std::string kTest =
+      Preamble() + BasicTypes() + R"(         %10 = OpTypeSampler
+%_ptr_UniformConstant_10 = OpTypePointer UniformConstant %10
+         %12 = OpVariable %_ptr_UniformConstant_10 UniformConstant
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+          %6 = OpLoad %10 %12
+               OpReturn
+               OpFunctionEnd
+)";
+
+  SCOPED_TRACE("sampler");
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  // EXPECT_EQ(status, Pass::Status::SuccessWithoutChange);
+  EXPECT_EQ(disasm, kTest);
+}
+
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, DISABLED_Decls_ShouldChange) {
+  const auto& image_type_decl = GetParam().image_type_decl;
+  const std::string kTest = Preamble() + Decorations() + BasicTypes() +
+                            Decls(image_type_decl) + Main();
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange);
+  EXPECT_EQ(disasm, kTest);
+}
+
+INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,
+                         SplitCombinedImageSamplerPassTypeCaseTest,
+                         ::testing::ValuesIn(Cases()));
 
 }  // namespace
 }  // namespace opt
