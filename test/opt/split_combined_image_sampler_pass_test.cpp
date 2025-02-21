@@ -172,14 +172,33 @@ TEST_F(SplitCombinedImageSamplerPassTest, SamplerOnly_NoChange) {
                OpFunctionEnd
 )";
 
-  SCOPED_TRACE("sampler");
+  SCOPED_TRACE("sampler only");
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest + NoCheck(), /* do_validation= */ true);
-  // EXPECT_EQ(status, Pass::Status::SuccessWithoutChange);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange);
   EXPECT_EQ(disasm, kTest);
 }
 
-TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, DISABLED_Decls_ShouldChange) {
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, ImageOnly_NoChange) {
+  const std::string kTest = Preamble() + BasicTypes() + R"(         %10 = )" +
+                            GetParam().image_type_decl + R"(
+%_ptr_UniformConstant_10 = OpTypePointer UniformConstant %10
+         %12 = OpVariable %_ptr_UniformConstant_10 UniformConstant
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+          %6 = OpLoad %10 %12
+               OpReturn
+               OpFunctionEnd
+)";
+
+  SCOPED_TRACE("image only");
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange);
+  EXPECT_EQ(disasm, kTest);
+}
+
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, DISABLED_Load) {
   const auto& image_type_decl = GetParam().image_type_decl;
   const std::string kTest = Preamble() + Decorations() + BasicTypes() +
                             Decls(image_type_decl) + Main();
