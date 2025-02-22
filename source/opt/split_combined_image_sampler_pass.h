@@ -56,13 +56,15 @@ class SplitCombinedImageSamplerPass : public Pass {
   void FindCombinedTextureSamplers();
 
   spv_result_t EnsureSamplerTypeAppearsFirst();
+  spv_result_t RemapVars();
+  spv_result_t RemapVar(Instruction* var);
+  spv_result_t RemoveDeadInstructions();
 
   struct RemapInfo {
-    uint32_t mem_obj_decl = 0;  // the var or parameter.
+    uint32_t var_id = 0;
     uint32_t sampled_image_type = 0;
-#if 0
     uint32_t image_type = 0;
-    uint32_t sampler_type = 0;
+#if 0
     uint32_t descriptor_set = 0;
     uint32_t original_set = 0;
     uint32_t original_binding = 0;
@@ -83,8 +85,11 @@ class SplitCombinedImageSamplerPass : public Pass {
   // Maps the ID of a memory object declaration for a combined texture+sampler
   // to remapping information about that object.
   std::unordered_map<uint32_t, RemapInfo> remap_info_;
-  // The key of objs_ in the order they were added.
-  std::vector<uint32_t> ordered_objs_;
+  // The instructions added to remap_info_, in the order they were added.
+  std::vector<Instruction*> ordered_objs_;
+
+  // The instructions to be removed.
+  std::vector<Instruction*> dead_;
 };
 }  // namespace opt
 }  // namespace spvtools

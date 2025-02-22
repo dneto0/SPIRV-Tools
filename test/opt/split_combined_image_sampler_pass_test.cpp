@@ -213,7 +213,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
                OpFunctionEnd
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest + NoCheck(), /* do_validation= */ true);
+      kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange);
 }
 
@@ -246,7 +246,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
                OpFunctionEnd
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest + NoCheck(), /* do_validation= */ true);
+      kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange);
 }
 
@@ -272,7 +272,7 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
                OpFunctionEnd
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest + NoCheck(), /* do_validation= */ true);
+      kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange);
 }
 

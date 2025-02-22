@@ -593,6 +593,23 @@ class InstructionBuilder {
     return AddInstruction(std::move(new_inst));
   }
 
+  Instruction* AddSampledImage(uint32_t sampled_image_type_id,
+                               uint32_t image_id, uint32_t sampler_id) {
+    std::vector<Operand> operands;
+    operands.push_back({SPV_OPERAND_TYPE_ID, {image_id}});
+    operands.push_back({SPV_OPERAND_TYPE_ID, {sampler_id}});
+
+    uint32_t result_id = GetContext()->TakeNextId();
+    if (result_id == 0) {
+      return nullptr;
+    }
+
+    std::unique_ptr<Instruction> new_inst(
+        new Instruction(GetContext(), spv::Op::OpSampledImage,
+                        sampled_image_type_id, result_id, operands));
+    return AddInstruction(std::move(new_inst));
+  }
+
   // Inserts the new instruction before the insertion point.
   Instruction* AddInstruction(std::unique_ptr<Instruction>&& insn) {
     Instruction* insn_ptr = &*insert_before_.InsertBefore(std::move(insn));
