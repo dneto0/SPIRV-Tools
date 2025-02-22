@@ -538,7 +538,9 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   // image+sampler, possibly unpacking one level of arrayness.  If so,
   // returns the OpTypeSampledImage instruction pointee type. Otherwise
   // returns null.
-  Instruction* AsVulkanCombinedSampledImageType();
+  Instruction* GetVulkanResourcePointee(
+      spv::Op pointee_ty,
+      spv::StorageClass sc = spv::StorageClass::UniformConstant) const;
 
   inline bool operator==(const Instruction&) const;
   inline bool operator!=(const Instruction&) const;

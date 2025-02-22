@@ -168,12 +168,11 @@ TEST_F(SplitCombinedImageSamplerPassTest, SamplerOnly_NoChange) {
   EXPECT_EQ(disasm, kTest) << "disasm";
 }
 
-TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, ImageOnly_NoChange) {
+TEST_F(SplitCombinedImageSamplerPassTest, ImageOnly_NoChange) {
   const std::string kTest = Preamble() +
                             R"(               OpDecorate %100 DescriptorSet 0
                OpDecorate %100 Binding 0
-)" + BasicTypes() + R"(         %10 = )" +
-                            GetParam().image_type_decl + R"(
+)" + BasicTypes() + R"(         %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
 %_ptr_UniformConstant_10 = OpTypePointer UniformConstant %10
         %100 = OpVariable %_ptr_UniformConstant_10 UniformConstant
        %main = OpFunction %void None %voidfn
@@ -190,15 +189,22 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, ImageOnly_NoChange) {
   EXPECT_EQ(disasm, kTest);
 }
 
-TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
-  const auto& image_type_decl = GetParam().image_type_decl;
+TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
+  // No OpTypeSampler to begin with.
   const std::string kTest = Preamble() +
                             R"(               OpDecorate %100 DescriptorSet 0
                OpDecorate %100 Binding 0
-)" + BasicTypes() + R"(         %10 = )" +
-                            GetParam().image_type_decl + R"(
+
+     ; A sampler type is created and placed at the start of types.
+     ; CHECK: OpDecorate %100 Binding 0
+     ; CHECK-NEXT: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK-NEXT: OpTypeBool
+
+               %bool = OpTypeBool ; location marker
+)" + BasicTypes() + R"( %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
          %11 = OpTypeSampledImage %10
 %_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+
         %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
        %main = OpFunction %void None %voidfn
      %main_0 = OpLabel
@@ -209,7 +215,65 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest + NoCheck(), /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange);
-  //  EXPECT_NE(disasm, kTest);
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
+  // No OpTypeSampler to begin with.
+  const std::string kTest = Preamble() +
+                            R"(               OpDecorate %100 DescriptorSet 0
+               OpDecorate %100 Binding 0
+
+     ; The sampler type is moved to the front.
+     ; CHECK: OpDecorate %100 Binding 0
+     ; CHECK-NEXT: %99 = OpTypeSampler
+     ; CHECK-NEXT: OpTypeBool
+     ; CHECK-NOT: OpTypeSampler
+     ; CHECK: OpFunction %void
+
+               %bool = OpTypeBool ; location marker
+)" + BasicTypes() +
+                            R"(%10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+         %11 = OpTypeSampledImage %10
+%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+
+        %99 = OpTypeSampler
+
+        %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+          %6 = OpLoad %11 %100
+               OpReturn
+               OpFunctionEnd
+)";
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange);
+}
+
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
+  // No OpTypeSampler to begin with.
+  const std::string kTest = Preamble() +
+                            R"(               OpDecorate %100 DescriptorSet 0
+               OpDecorate %100 Binding 0
+
+     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+
+               %bool = OpTypeBool ; location marker
+)" + BasicTypes() +
+                            "%10 = " + GetParam().image_type_decl + R"(
+         %11 = OpTypeSampledImage %10
+%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+
+        %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+          %6 = OpLoad %11 %100
+               OpReturn
+               OpFunctionEnd
+)";
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange);
 }
 
 INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,

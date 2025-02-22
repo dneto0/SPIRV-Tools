@@ -21,6 +21,7 @@
 #include "source/diagnostic.h"
 #include "source/opt/def_use_manager.h"
 #include "source/opt/pass.h"
+#include "source/opt/type_manager.h"
 
 namespace spvtools {
 namespace opt {
@@ -54,6 +55,8 @@ class SplitCombinedImageSamplerPass : public Pass {
   // Populates obj_ and ordered_objs_;
   void FindCombinedTextureSamplers();
 
+  spv_result_t EnsureSamplerTypeAppearsFirst();
+
   struct RemapInfo {
     uint32_t mem_obj_decl = 0;  // the var or parameter.
     uint32_t sampled_image_type = 0;
@@ -68,16 +71,20 @@ class SplitCombinedImageSamplerPass : public Pass {
 
   // Cached from the IRContext. Valid while Process() is running.
   analysis::DefUseManager* def_use_mgr_ = nullptr;
+  // Cached from the IRContext. Valid while Process() is running.
+  analysis::TypeManager* type_mgr_ = nullptr;
+
+  // An OpTypeSampler instruction, if one existed already, or if we created one.
+  Instruction* sampler_type_ = nullptr;
+  // A pointer-to-sampler instruction, if one existed already, or if we created
+  // one.
+  Instruction* ptr_sampler_type_ = nullptr;
 
   // Maps the ID of a memory object declaration for a combined texture+sampler
   // to remapping information about that object.
   std::unordered_map<uint32_t, RemapInfo> remap_info_;
   // The key of objs_ in the order they were added.
   std::vector<uint32_t> ordered_objs_;
-
-  struct {
-    bool failed = false;
-  } module_status_;
 };
 }  // namespace opt
 }  // namespace spvtools

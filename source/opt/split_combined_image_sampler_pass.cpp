@@ -25,29 +25,74 @@
 namespace spvtools {
 namespace opt {
 
+#define CHECK(cond)                                        \
+  {                                                        \
+    if (cond != SPV_SUCCESS) return Pass::Status::Failure; \
+  }
+
 Pass::Status SplitCombinedImageSamplerPass::Process() {
   def_use_mgr_ = context()->get_def_use_mgr();
+  type_mgr_ = context()->get_type_mgr();
+
   FindCombinedTextureSamplers();
-  return ordered_objs_.empty() ? Pass::Status::SuccessWithoutChange
-                               : Pass::Status::SuccessWithChange;
+  if (ordered_objs_.empty()) return Pass::Status::SuccessWithoutChange;
+
+  CHECK(EnsureSamplerTypeAppearsFirst());
+
+  return Pass::Status::SuccessWithChange;
 }
 
 spvtools::DiagnosticStream SplitCombinedImageSamplerPass::Fail() {
-  module_status_.failed = true;
   return std::move(
       spvtools::DiagnosticStream({}, consumer(), "", SPV_ERROR_INVALID_BINARY)
       << "split-combined-image-sampler: ");
 }
 
+spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
+  if (sampler_type_) {
+    sampler_type_->RemoveFromList();
+  } else {
+    // Create it.
+    uint32_t sampler_type_id = context()->TakeNextId();
+    if (sampler_type_id == 0) {
+      return Fail() << "ran out of IDs when creating a sampler type";
+    }
+
+    sampler_type_ = new Instruction(context(), spv::Op::OpTypeSampler,
+                                    sampler_type_id, 0, {});
+
+    // Update analyses.
+    def_use_mgr_->AnalyzeInstDefUse(sampler_type_);
+    type_mgr_->RegisterType(sampler_type_id, analysis::Sampler());
+  }
+
+  // Put it at the start of the types-and-values list:
+  // It depends on nothing, and other things will depend on it.
+  std::unique_ptr<Instruction> inst(sampler_type_);
+  context()->types_values_begin()->InsertBefore(std::move(inst));
+
+  return SPV_SUCCESS;
+}
+
 void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
   for (auto& inst : context()->types_values()) {
-    if (inst.opcode() != spv::Op::OpVariable) continue;
-    Instruction* ptr_ty = def_use_mgr_->GetDef(inst.type_id());
-    if (Instruction* combined_ty = ptr_ty->AsVulkanCombinedSampledImageType()) {
-      ordered_objs_.push_back(inst.result_id());
-      auto& info = remap_info_[inst.result_id()];
-      info.mem_obj_decl = inst.result_id();
-      info.sampled_image_type = combined_ty->result_id();
+    switch (inst.opcode()) {
+      case spv::Op::OpTypeSampler:
+        // Note: In any case, valid modules can't have duplicate sampler types.
+        sampler_type_ = &inst;
+        break;
+
+      case spv::Op::OpVariable: {
+        Instruction* ptr_ty = def_use_mgr_->GetDef(inst.type_id());
+        if (Instruction* combined_ty =
+                ptr_ty->GetVulkanResourcePointee(spv::Op::OpTypeSampledImage)) {
+          ordered_objs_.push_back(inst.result_id());
+          auto& info = remap_info_[inst.result_id()];
+          info.mem_obj_decl = inst.result_id();
+          info.sampled_image_type = combined_ty->result_id();
+        }
+        break;
+      }
     }
   }
 }
