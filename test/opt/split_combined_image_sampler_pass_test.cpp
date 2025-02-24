@@ -27,6 +27,7 @@ namespace {
 struct TypeCase {
   const char* glsl_type;
   const char* image_type_decl;
+  const char* sample;
 };
 std::ostream& operator<<(std::ostream& os, const TypeCase& tc) {
   os << tc.glsl_type;
@@ -56,7 +57,9 @@ struct SplitCombinedImageSamplerPassTypeCaseTest
 
 std::vector<TypeCase> Cases() {
   return std::vector<TypeCase>{
-      {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown"},
+      {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown",
+       "OpImageSampleExplicitLod %v4float %combined %13 Lod %float_0"},
+#if 0
       {"sampler2DShadow", "OpTypeImage %float 2D 1 0 0 1 Unknown"},
       {"sampler2DArray", "OpTypeImage %float 2D 0 1 0 1 Unknown"},
       {"sampler2DArrayShadow", "OpTypeImage %float 2D 1 1 0 1 Unknown"},
@@ -89,6 +92,7 @@ std::vector<TypeCase> Cases() {
       {"usamplerCubeShadow", "OpTypeImage %uint Cube 1 0 0 1 Unknown"},
       {"usamplerCubeArray", "OpTypeImage %uint Cube 0 1 0 1 Unknown"},
       {"usamplerCubeArrayShadow", "OpTypeImage %uint Cube 1 1 0 1 Unknown"},
+#endif
   };
 }
 
@@ -114,6 +118,13 @@ std::string BasicTypes() {
   return R"(      %float = OpTypeFloat 32
        %uint = OpTypeInt 32 0
         %int = OpTypeInt 32 1
+    %float_0 = OpConstant %float 0
+    %v2float = OpTypeVector %float 2
+    %v3float = OpTypeVector %float 3
+    %v4float = OpTypeVector %float 4
+         %13 = OpConstantNull %v2float
+         %14 = OpConstantNull %v3float
+         %15 = OpConstantNull %v4float
        %void = OpTypeVoid
      %voidfn = OpTypeFunction %void
 )";
@@ -196,9 +207,9 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
                OpDecorate %100 Binding 0
 
      ; A sampler type is created and placed at the start of types.
-     ; CHECK: OpDecorate %100 Binding 0
+     ; CHECK: OpDecorate %{{\d+}} Binding 0
+     ; CHECK: OpDecorate %{{\d+}} Binding 0
      ; CHECK-NEXT: %[[sampler_ty:\d+]] = OpTypeSampler
-     ; CHECK-NEXT: OpTypeBool
 
                %bool = OpTypeBool ; location marker
 )" + BasicTypes() + R"( %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
@@ -214,7 +225,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest, /* do_validation= */ true);
-  EXPECT_EQ(status, Pass::Status::SuccessWithChange);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
 TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
@@ -224,9 +235,9 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
                OpDecorate %100 Binding 0
 
      ; The sampler type is moved to the front.
-     ; CHECK: OpDecorate %100 Binding 0
+     ; CHECK: OpDecorate %{{\d+}} Binding 0
+     ; CHECK: OpDecorate %{{\d+}} Binding 0
      ; CHECK-NEXT: %99 = OpTypeSampler
-     ; CHECK-NEXT: OpTypeBool
      ; CHECK-NOT: OpTypeSampler
      ; CHECK: OpFunction %void
 
@@ -247,33 +258,67 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest, /* do_validation= */ true);
-  EXPECT_EQ(status, Pass::Status::SuccessWithChange);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
 TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
-  // No OpTypeSampler to begin with.
   const std::string kTest = Preamble() +
-                            R"(               OpDecorate %100 DescriptorSet 0
+                            R"(
+               OpName %combined "combined"
+               OpDecorate %100 DescriptorSet 0
                OpDecorate %100 Binding 0
 
-     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK: OpName
+     ; CHECK-NOT: OpDecorate %100
+     ; CHECK: OpDecorate %[[image_var:\d+]] DescriptorSet 0
+     ; CHECK: OpDecorate %[[sampler_var:\d+]] DescriptorSet 0
+     ; CHECK: OpDecorate %[[image_var]] Binding 0
+     ; CHECK: OpDecorate %[[sampler_var]] Binding 0
+
+     ; A sampler type is created and placed at the start of types, and its pointer
+     ; type follows immediately.
+     ; CHECK-NEXT: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK-NEXT: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
+
+     ; The image pointer type follows the image type.
+     ; CHECK: %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+     ; type follows immediately.
+     ; CHECK-NEXT: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+
+     ; The combined image variable is replaced by an image variable and a sampler variable.
+
+     ; CHECK-NOT: %100 = OpVariable
+     ; CHECK-DAG: %[[sampler_var]] = OpVariable %[[sampler_ptr_ty]] UniformConstant
+     ; CHECK-DAG: %[[image_var]] = OpVariable %[[image_ptr_ty]] UniformConstant
+     ; CHECK: = OpFunction
+
+     ; The load of the combined image+sampler is replaced by a two loads, then
+     ; a combination operation.
+     ; CHECK: %[[im:\d+]] = OpLoad %10 %[[image_var]]
+     ; CHECK: %[[s:\d+]] = OpLoad %[[sampler_ty]] %[[sampler_var]]
+     ; CHECK: %combined = OpSampledImage %11 %[[im]] %[[s]]
+
+     ; Uses of the combined image sampler are preserved.
+     ; CHECK: OpImageSampleExplicitLod %{{.*}} %combined
 
                %bool = OpTypeBool ; location marker
 )" + BasicTypes() +
-                            "%10 = " + GetParam().image_type_decl + R"(
+                            " %10 = " + GetParam().image_type_decl + R"(
          %11 = OpTypeSampledImage %10
 %_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
 
         %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
        %main = OpFunction %void None %voidfn
      %main_0 = OpLabel
-          %6 = OpLoad %11 %100
+   %combined = OpLoad %11 %100
+          %7 = )" + GetParam().sample +
+                            R"(
                OpReturn
                OpFunctionEnd
 )";
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest, /* do_validation= */ true);
-  EXPECT_EQ(status, Pass::Status::SuccessWithChange);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
 INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,

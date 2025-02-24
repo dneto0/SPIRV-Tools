@@ -572,6 +572,20 @@ class InstructionBuilder {
     return AddInstruction(std::move(new_inst));
   }
 
+  Instruction* AddDecoration(uint32_t target_id, spv::Decoration d,
+                             const std::vector<uint32_t>& literals) {
+    std::vector<Operand> operands;
+    operands.push_back({SPV_OPERAND_TYPE_ID, {target_id}});
+    operands.push_back({SPV_OPERAND_TYPE_DECORATION, {uint32_t(d)}});
+    for (uint32_t literal : literals) {
+      operands.push_back({SPV_OPERAND_TYPE_LITERAL_INTEGER, {literal}});
+    }
+
+    std::unique_ptr<Instruction> new_inst(
+        new Instruction(GetContext(), spv::Op::OpDecorate, 0, 0, operands));
+    return AddInstruction(std::move(new_inst));
+  }
+
   Instruction* AddNaryExtendedInstruction(
       uint32_t result_type, uint32_t set, uint32_t instruction,
       const std::vector<uint32_t>& ext_operands) {

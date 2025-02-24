@@ -29,6 +29,10 @@ namespace opt {
 // Replaces each combined-image sampler variable with an image variable
 // and a sampler variable.
 //
+// First cut: use the same binding number. Vulkan allows this, surprisingly.
+//
+// Second cut: remap the bindings.
+//
 // Binding numbers are remapped as follows:
 // * For a combined image+sampler at binding k, its corresponding
 //   image is at binding 2*k, and its corresponding sampler is at 2*k+1
@@ -38,7 +42,6 @@ namespace opt {
 // use in WebGPU.
 //
 // Limitations:
-// * Does nothing for now.
 // * Does not handle arrays-of-resources
 class SplitCombinedImageSamplerPass : public Pass {
  public:
@@ -64,11 +67,6 @@ class SplitCombinedImageSamplerPass : public Pass {
     uint32_t var_id = 0;
     uint32_t sampled_image_type = 0;
     uint32_t image_type = 0;
-#if 0
-    uint32_t descriptor_set = 0;
-    uint32_t original_set = 0;
-    uint32_t original_binding = 0;
-#endif
   };
 
   // Cached from the IRContext. Valid while Process() is running.

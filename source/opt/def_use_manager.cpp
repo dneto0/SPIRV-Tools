@@ -53,7 +53,6 @@ void DefUseManager::AnalyzeInstUse(Instruction* inst) {
       case SPV_OPERAND_TYPE_TYPE_ID:
       case SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID:
       case SPV_OPERAND_TYPE_SCOPE_ID: {
-        std::cout << " inst " << *inst << " index " << i << std::endl;
         uint32_t use_id = inst->GetSingleWordOperand(i);
         Instruction* def = GetDef(use_id);
         assert(def && "Definition is not registered.");

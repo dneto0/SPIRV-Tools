@@ -48,6 +48,9 @@ Pass::Status SplitCombinedImageSamplerPass::Process() {
   CHECK(RemapVars());
   CHECK(RemoveDeadInstructions());
 
+  def_use_mgr_ = nullptr;
+  type_mgr_ = nullptr;
+
   return Pass::Status::SuccessWithChange;
 }
 
@@ -88,9 +91,7 @@ spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
   Instruction* first_type_val = &*(context()->types_values_begin());
   if (sampler_type_) {
     if (sampler_type_ != first_type_val) {
-      sampler_type_->RemoveFromList();
-      std::unique_ptr<Instruction> inst(sampler_type_);
-      first_type_val->InsertBefore(std::move(inst));
+      sampler_type_->InsertBefore(first_type_val);
     }
   } else {
     InstructionBuilder builder(
@@ -107,7 +108,6 @@ spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
         context(), spv::Op::OpTypeSampler, 0, sampler_type_id, {}));
 
     sampler_type_ = builder.AddInstruction(std::move(inst));
-    std::cout << " sampler type id " << sampler_type_->result_id() << std::endl;
     def_use_mgr_->AnalyzeInstDefUse(sampler_type_);
     type_mgr_->RegisterType(sampler_type_id, analysis::Sampler());
   }
@@ -118,6 +118,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVars() {
   for (Instruction* var : ordered_objs_) {
     CHECK_STATUS(RemapVar(var));
   }
+  return SPV_SUCCESS;
 }
 
 spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
@@ -125,56 +126,104 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
   InstructionBuilder builder(context(), var, IRContext::kAnalysisDefUse);
   auto& info = remap_info_[var->result_id()];
   assert(info.var_id == var->result_id());
-  std::cout << " samplare type id is " << sampler_type_->result_id()
-            << std::endl;
   assert(def_use_mgr_->GetDef(sampler_type_->result_id()));
-  Instruction* sampler_var = builder.AddVariable(
-      sampler_type_->result_id(), SpvStorageClassUniformConstant);
+
+  // Create the pointer types as needed.
+  uint32_t sampler_ptr_ty_id = type_mgr_->FindPointerToType(
+      sampler_type_->result_id(), spv::StorageClass::UniformConstant);
+  uint32_t image_ptr_ty_id = type_mgr_->FindPointerToType(
+      info.image_type, spv::StorageClass::UniformConstant);
+
+  // By default they were created at the end of the types-and-global-vars list.
+  // Move them to just after the pointee type declaration.
+  auto* sampler_ptr_ty = def_use_mgr_->GetDef(sampler_ptr_ty_id);
+  auto* image_ptr_ty = def_use_mgr_->GetDef(image_ptr_ty_id);
+  auto* image_ty = def_use_mgr_->GetDef(info.image_type);
+
+  sampler_ptr_ty->InsertAfter(sampler_type_);
+  image_ptr_ty->InsertAfter(image_ty);
+
+  // Create the variables.
+  Instruction* sampler_var =
+      builder.AddVariable(sampler_ptr_ty_id, SpvStorageClassUniformConstant);
   Instruction* image_var =
-      builder.AddVariable(info.image_type, SpvStorageClassUniformConstant);
+      builder.AddVariable(image_ptr_ty_id, SpvStorageClassUniformConstant);
 
-  // TODO: transfer decorations
-  // TODO: update bindings
+  // SPIR-V has a Data rule:
+  //  > All OpSampledImage instructions, or instructions that load an image or
+  //  > sampler reference, must be in the same block in which their Result <id>
+  //  > are consumed.
+  //
+  // Assuming that rule is honoured, the load is in the same block as the
+  // operation using the sampled image that was loaded. So it's ok to load
+  // the separate image and texture sampler, and also to create the combined
+  // sampled image from them, all in the same basic block.
 
-  def_use_mgr_->ForEachUser(var, [&](Instruction* user) {
-    std::cout << "=uaer..." << std::endl;
-    switch (user->opcode()) {
+  struct Use {
+    Instruction* user;
+    uint32_t index;
+  };
+  std::vector<Use> uses;
+  def_use_mgr_->ForEachUse(var, [&](Instruction* user, uint32_t use_index) {
+    uses.push_back({user, use_index});
+  });
+
+  for (auto& use : uses) {
+    switch (use.user->opcode()) {
       case spv::Op::OpLoad: {
-        Instruction* load = user;
+        if (use.index != 2)
+          return Fail() << "variable used as non-pointer index " << use.index
+                        << " on load" << *use.user;
+        Instruction* load = use.user;
         builder.SetInsertPoint(load);
-        std::cout << "= load. image.." << std::endl;
         auto* image = builder.AddLoad(info.image_type, image_var->result_id());
-        std::cout << "= load. sampler.." << std::endl;
         auto* sampler = builder.AddLoad(sampler_type_->result_id(),
                                         sampler_var->result_id());
-        std::cout << "= combine.." << std::endl;
         auto* sampled_image = builder.AddSampledImage(
             info.sampled_image_type, image->result_id(), sampler->result_id());
-        std::cout << "= RAUW.." << def_use_mgr_ << std::endl;
-        def_use_mgr_->ForEachUse(load, [&](Instruction* user, uint32_t index) {
-          std::cout << index << std::endl;
-          user->SetOperand(index, {sampled_image->result_id()});
-        });
+        this->def_use_mgr_->ForEachUse(
+            load, [&](Instruction* user, uint32_t index) {
+              user->SetOperand(index, {sampled_image->result_id()});
+            });
         dead_.push_back(load);
         break;
       }
-        // todo function call
+      case spv::Op::OpDecorate: {
+        if (use.index != 0)
+          return Fail() << "variable used as non-target index " << use.index
+                        << " on decoration: " << *use.user;
+        builder.SetInsertPoint(use.user);
+        spv::Decoration deco{use.user->GetSingleWordInOperand(1)};
+        std::vector<uint32_t> literals;
+        for (uint32_t i = 2; i < use.user->NumInOperands(); i++) {
+          literals.push_back(use.user->GetSingleWordInOperand(i));
+        }
+        builder.AddDecoration(image_var->result_id(), deco, literals);
+        builder.AddDecoration(sampler_var->result_id(), deco, literals);
+        dead_.push_back(use.user);
+        break;
+      }
+      default:
+        std::cout << "unhandled user: " << *use.user << std::endl;
     }
-  });
+  }
 
   dead_.push_back(var);
+  return SPV_SUCCESS;
 }
 
 spv_result_t SplitCombinedImageSamplerPass::RemoveDeadInstructions() {
-  // TODO delete dead typefrom type manager.
   for (Instruction* inst : dead_) {
     def_use_mgr_->ClearInst(inst);
+    // TODO delete dead type from type manager.
   }
   for (Instruction* inst : dead_) {
     inst->RemoveFromList();
     delete inst;
   }
+  ordered_objs_.clear();
   dead_.clear();
+  return SPV_SUCCESS;
 }
 
 }  // namespace opt
