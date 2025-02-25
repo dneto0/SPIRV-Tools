@@ -140,6 +140,11 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
   auto* image_ptr_ty = def_use_mgr_->GetDef(image_ptr_ty_id);
   auto* image_ty = def_use_mgr_->GetDef(info.image_type);
 
+  def_use_mgr_->AnalyzeInstUse(sampler_type_);
+  def_use_mgr_->AnalyzeInstUse(sampler_ptr_ty);
+  def_use_mgr_->AnalyzeInstUse(image_ty);
+  def_use_mgr_->AnalyzeInstUse(image_ptr_ty);
+
   sampler_ptr_ty->InsertAfter(sampler_type_);
   image_ptr_ty->InsertAfter(image_ty);
 
@@ -185,6 +190,9 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
             load, [&](Instruction* user, uint32_t index) {
               user->SetOperand(index, {sampled_image->result_id()});
             });
+        def_use_mgr_->AnalyzeInstUse(image);
+        def_use_mgr_->AnalyzeInstUse(sampler);
+        def_use_mgr_->AnalyzeInstUse(sampled_image);
         dead_.push_back(load);
         break;
       }
@@ -203,10 +211,35 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
         dead_.push_back(use.user);
         break;
       }
+      case spv::Op::OpEntryPoint: {
+        // The entry point lists variables in the shader interface, i.e.
+        // module-scope variables referenced by the static call tree rooted
+        // at the entry point. (It can be a proper superset).  Before SPIR-V
+        // 1.4, only Input and Output variables are listed; in 1.4 and later,
+        // module-scope variables in all storage classes are listed.
+        // If a combined image+sampler is listed by the entry point, then
+        // the separated image and sampler variables should be.
+        if (use.index < 3)
+          return Fail() << "variable used in index " << use.index
+                        << " instead of as an interface variable:" << *use.user;
+        // Avoid moving the other IDs around, so we don't have to update their
+        // uses in the def_use_mgr_.
+        use.user->SetOperand(use.index, {image_var->result_id()});
+        use.user->InsertOperand(
+            use.user->NumOperands(),
+            {SPV_OPERAND_TYPE_ID, {sampler_var->result_id()}});
+        break;
+      }
+      case spv::Op::OpName:
+        dead_.push_back(use.user);
+        break;
       default:
         std::cout << "unhandled user: " << *use.user << std::endl;
     }
   }
+  // We've added new uses of the new variables.
+  def_use_mgr_->AnalyzeInstUse(image_var);
+  def_use_mgr_->AnalyzeInstUse(sampler_var);
 
   dead_.push_back(var);
   return SPV_SUCCESS;

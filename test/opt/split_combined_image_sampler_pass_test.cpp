@@ -24,16 +24,6 @@ namespace spvtools {
 namespace opt {
 namespace {
 
-struct TypeCase {
-  const char* glsl_type;
-  const char* image_type_decl;
-  const char* sample;
-};
-std::ostream& operator<<(std::ostream& os, const TypeCase& tc) {
-  os << tc.glsl_type;
-  return os;
-}
-
 struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
   virtual void SetUp() override {
     SetTargetEnv(SPV_ENV_VULKAN_1_0);
@@ -43,6 +33,16 @@ struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
                           SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
   }
 };
+
+struct TypeCase {
+  const char* glsl_type;
+  const char* image_type_decl;
+  const char* sample;
+};
+std::ostream& operator<<(std::ostream& os, const TypeCase& tc) {
+  os << tc.glsl_type;
+  return os;
+}
 
 struct SplitCombinedImageSamplerPassTypeCaseTest
     : public PassTest<::testing::TestWithParam<TypeCase>> {
@@ -55,7 +55,7 @@ struct SplitCombinedImageSamplerPassTypeCaseTest
   }
 };
 
-std::vector<TypeCase> Cases() {
+std::vector<TypeCase> ImageTypeCases() {
   return std::vector<TypeCase>{
       {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown",
        "OpImageSampleExplicitLod %v4float %combined %13 Lod %float_0"},
@@ -103,11 +103,24 @@ TEST_F(SplitCombinedImageSamplerPassTest, CombinedBindingNumber
 TEST_F(SplitCombinedImageSamplerPassTest, BindingNumbersOtherResources)
 #endif
 
-std::string Preamble() {
+std::string Preamble(const std::string shader_interface = "") {
   return R"(               OpCapability Shader
                OpMemoryModel Logical GLSL450
-               OpEntryPoint GLCompute %main "main"
+               OpEntryPoint GLCompute %main "main")" +
+         shader_interface + R"(
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %main_0 "main_0"
+               OpName %voidfn "voidfn"
+)";
+}
+
+std::string PreambleFragment(const std::string shader_interface = "") {
+  return R"(               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main")" +
+         shader_interface + R"(
+               OpExecutionMode %main OriginUpperLeft
                OpName %main "main"
                OpName %main_0 "main_0"
                OpName %voidfn "voidfn"
@@ -261,7 +274,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
   const std::string kTest = Preamble() +
                             R"(
                OpName %combined "combined"
@@ -323,7 +336,226 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_Load) {
 
 INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,
                          SplitCombinedImageSamplerPassTypeCaseTest,
-                         ::testing::ValuesIn(Cases()));
+                         ::testing::ValuesIn(ImageTypeCases()));
+
+struct EntryPointRemapCase {
+  const spv_target_env environment = SPV_ENV_VULKAN_1_0;
+  const char* initial_interface = "";
+  const char* expected_interface = nullptr;
+  const bool expect_success = true;
+};
+
+std::ostream& operator<<(std::ostream& os, const EntryPointRemapCase& eprc) {
+  os << "(init " << eprc.initial_interface << " -> expect "
+     << eprc.expected_interface << ", expect "
+     << (eprc.expect_success ? "success" : "failure") << ")";
+  return os;
+}
+
+struct SplitCombinedImageSamplerPassEntryPointRemapTest
+    : public PassTest<::testing::TestWithParam<EntryPointRemapCase>> {
+  virtual void SetUp() override {
+    SetTargetEnv(GetParam().environment);
+    SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
+    SetDisassembleOptions(SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+                          SPV_BINARY_TO_TEXT_OPTION_INDENT |
+                          SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
+  }
+};
+
+std::vector<EntryPointRemapCase> EntryPointInterfaceCases() {
+  return std::vector<EntryPointRemapCase>{
+      {SPV_ENV_VULKAN_1_0, " %in_var %out_var", " %in_var %out_var"},
+      {SPV_ENV_VULKAN_1_4, " %combined_var",
+       " %[[image_var:\\d+]] %[[sampler_var:\\d+]]"},
+      {SPV_ENV_VULKAN_1_4, " %combined_var %in_var %out_var",
+       " %[[image_var:\\d+]] %in_var %out_var %[[sampler_var:\\d+]]"},
+      {SPV_ENV_VULKAN_1_4, " %in_var %combined_var %out_var",
+       " %in_var %[[image_var:\\d+]] %out_var %[[sampler_var:\\d+]]"},
+      {SPV_ENV_VULKAN_1_4, " %in_var %out_var %combined_var",
+       " %in_var %out_var %[[image_var:\\d+]] %[[sampler_var:\\d+]]"},
+  };
+};
+
+TEST_P(SplitCombinedImageSamplerPassEntryPointRemapTest,
+       EntryPoint_Combined_UsedInShader) {
+  const bool combined_var_in_interface =
+      std::string(GetParam().initial_interface).find("%combined_var") !=
+      std::string::npos;
+  // If the combined var is listed in the entry point, then the entry point
+  // interface will give the pattern match definition of the sampler var ID.
+  // Otherwise it's defined at the assignment.
+  const std::string sampler_var_def =
+      combined_var_in_interface ? "%[[sampler_var]]" : "%[[sampler_var:\\d+]]";
+  const std::string image_var_def =
+      combined_var_in_interface ? "%[[image_var]]" : "%[[image_var:\\d+]]";
+  const std::string kTest = PreambleFragment(GetParam().initial_interface) +
+                            R"(
+               OpName %combined "combined"
+               OpName %combined_var "combined_var"
+               OpName %in_var "in_var"
+               OpName %out_var "out_var"
+               OpDecorate %combined_var DescriptorSet 0
+               OpDecorate %combined_var Binding 0
+               OpDecorate %in_var BuiltIn FragCoord
+               OpDecorate %out_var Location 0
+
+; CHECK: OpEntryPoint Fragment %main "main")" +
+                            GetParam().expected_interface + R"(
+; These clauses ensure the expected interface is the whole interface.
+; CHECK-NOT: %{{\d+}}
+; CHECK-NOT: %in_var
+; CHECK-NOT: %out_var
+; CHECK-NOT: %combined_var
+; CHECK: OpExecutionMode %main OriginUpperLeft
+
+     ; Check the var names, tracing up through the types.
+     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK-NEXT: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
+     ; CHECK: %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+     ; CHECK: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+     ; The combined image variable is replaced by an image variable and a sampler variable.
+     ; CHECK-DAG: )" + sampler_var_def +
+                            R"( = OpVariable %[[sampler_ptr_ty]] UniformConstant
+     ; CHECK-DAG: )" + image_var_def +
+                            R"( = OpVariable %[[image_ptr_ty]] UniformConstant
+     ; CHECK: = OpFunction
+
+               %bool = OpTypeBool
+)" + BasicTypes() + R"(         %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+         %11 = OpTypeSampledImage %10
+%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+     %in_ptr_v4f = OpTypePointer Input %v4float
+     %in_var = OpVariable %in_ptr_v4f Input
+    %out_ptr_v4f = OpTypePointer Output %v4float
+    %out_var = OpVariable %out_ptr_v4f Output
+
+%combined_var = OpVariable %_ptr_UniformConstant_11 UniformConstant
+       %main = OpFunction %void None %voidfn
+       ;CHECK:  %main_0 = OpLabel
+       ;CHECK: OpLoad
+
+     %main_0 = OpLabel
+   %combined = OpLoad %11 %combined_var
+               OpReturn
+               OpFunctionEnd
+)";
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_P(SplitCombinedImageSamplerPassEntryPointRemapTest,
+       EntryPoint_Combined_UsedOnlyInEntryPointInstruction) {
+  // If the combined var is in the interface, that is enough to trigger
+  // its replacement. Otherwise the entry point interface is untouched
+  // when the combined var is not otherwise used.
+  const bool combined_var_in_interface =
+      std::string(GetParam().initial_interface).find("%combined_var") !=
+      std::string::npos;
+  if (combined_var_in_interface) {
+    const std::string kTest = PreambleFragment(GetParam().initial_interface) +
+                              R"(
+                 OpName %combined_var "combined_var"
+                 OpName %in_var "in_var"
+                 OpName %out_var "out_var"
+                 OpDecorate %combined_var DescriptorSet 0
+                 OpDecorate %combined_var Binding 0
+                 OpDecorate %in_var BuiltIn FragCoord
+                 OpDecorate %out_var Location 0
+
+  ; CHECK: OpEntryPoint Fragment %main "main")" +
+                              GetParam().expected_interface + R"(
+  ; These clauses ensure the expected interface is the whole interface.
+  ; CHECK-NOT: %{{\d+}}
+  ; CHECK-NOT: %in_var
+  ; CHECK-NOT: %out_var
+  ; CHECK-NOT: %combined_var
+  ; CHECK: OpExecutionMode %main OriginUpperLeft
+
+                 %bool = OpTypeBool
+  )" + BasicTypes() + R"(         %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+           %11 = OpTypeSampledImage %10
+  %_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+       %in_ptr_v4f = OpTypePointer Input %v4float
+       %in_var = OpVariable %in_ptr_v4f Input
+      %out_ptr_v4f = OpTypePointer Output %v4float
+      %out_var = OpVariable %out_ptr_v4f Output
+
+  ; %combined_var is not used!
+  %combined_var = OpVariable %_ptr_UniformConstant_11 UniformConstant
+         %main = OpFunction %void None %voidfn
+       %main_0 = OpLabel
+                 OpReturn
+                 OpFunctionEnd
+  )";
+    auto [disasm, status] =
+        SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+            kTest, /* do_validation= */ true);
+    EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+  }
+}
+
+TEST_P(SplitCombinedImageSamplerPassEntryPointRemapTest,
+       EntryPoint_Combined_Unused) {
+  // If the combined var is in the interface, that is enough to trigger
+  // its replacement. Otherwise the entry point interface is untouched
+  // when the combined var is not otherwise used.
+  const bool combined_var_in_interface =
+      std::string(GetParam().initial_interface).find("%combined_var") !=
+      std::string::npos;
+  if (!combined_var_in_interface) {
+    const std::string kTest = PreambleFragment(GetParam().initial_interface) +
+                              R"(
+  ; CHECK: OpEntryPoint Fragment %main "main")" +
+                              GetParam().initial_interface  // Note this is the
+                                                            // intial interface
+                              + R"(
+  ; These clauses ensure the expected interface is the whole interface.
+  ; CHECK-NOT: %{{\d+}}
+  ; CHECK-NOT: %in_var
+  ; CHECK-NOT: %out_var
+  ; CHECK-NOT: %combined_var
+  ; CHECK: OpExecutionMode %main OriginUpperLeft
+
+  ; All traces of the variable disappear
+  ; CHECK-NOT: combined_var
+  ; CHECK: OpFunctionEnd
+                 OpName %combined_var "combined_var"
+                 OpName %in_var "in_var"
+                 OpName %out_var "out_var"
+                 OpDecorate %combined_var DescriptorSet 0
+                 OpDecorate %combined_var Binding 0
+                 OpDecorate %in_var BuiltIn FragCoord
+                 OpDecorate %out_var Location 0
+
+
+                 %bool = OpTypeBool
+  )" + BasicTypes() + R"(         %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+           %11 = OpTypeSampledImage %10
+  %_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+       %in_ptr_v4f = OpTypePointer Input %v4float
+       %in_var = OpVariable %in_ptr_v4f Input
+      %out_ptr_v4f = OpTypePointer Output %v4float
+      %out_var = OpVariable %out_ptr_v4f Output
+
+  ; %combined_var is not used!
+  %combined_var = OpVariable %_ptr_UniformConstant_11 UniformConstant
+         %main = OpFunction %void None %voidfn
+       %main_0 = OpLabel
+                 OpReturn
+                 OpFunctionEnd
+)";
+    auto [disasm, status] =
+        SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+            kTest, /* do_validation= */ true);
+    EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(EntryPointRemap,
+                         SplitCombinedImageSamplerPassEntryPointRemapTest,
+                         ::testing::ValuesIn(EntryPointInterfaceCases()));
 
 }  // namespace
 }  // namespace opt
