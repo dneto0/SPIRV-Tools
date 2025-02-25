@@ -88,28 +88,17 @@ void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
 spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
   // Put it at the start of the types-and-values list:
   // It depends on nothing, and other things will depend on it.
-  Instruction* first_type_val = &*(context()->types_values_begin());
-  if (sampler_type_) {
-    if (sampler_type_ != first_type_val) {
-      sampler_type_->InsertBefore(first_type_val);
-    }
-  } else {
-    InstructionBuilder builder(
-        context(), first_type_val,
-        IRContext::kAnalysisDefUse | IRContext::kAnalysisInstrToBlockMapping);
-
-    // Create it.
-    uint32_t sampler_type_id = context()->TakeNextId();
+  if (!sampler_type_) {
+    analysis::Sampler s;
+    uint32_t sampler_type_id = type_mgr_->GetTypeInstruction(&s);
     if (sampler_type_id == 0) {
-      return Fail() << "ran out of IDs when creating a sampler type";
+      return Fail() << "could not create a sampler type: ran out of IDs?";
     }
-
-    std::unique_ptr<Instruction> inst(new Instruction(
-        context(), spv::Op::OpTypeSampler, 0, sampler_type_id, {}));
-
-    sampler_type_ = builder.AddInstruction(std::move(inst));
-    def_use_mgr_->AnalyzeInstDefUse(sampler_type_);
-    type_mgr_->RegisterType(sampler_type_id, analysis::Sampler());
+    sampler_type_ = def_use_mgr_->GetDef(sampler_type_id);
+  }
+  Instruction* first_type_val = &*(context()->types_values_begin());
+  if (sampler_type_ != first_type_val) {
+    sampler_type_->InsertBefore(first_type_val);
   }
   return SPV_SUCCESS;
 }
