@@ -42,6 +42,7 @@ namespace opt {
 // use in WebGPU.
 //
 // Limitations:
+// * Does not handle calls to functions
 // * Does not handle arrays-of-resources
 class SplitCombinedImageSamplerPass : public Pass {
  public:
