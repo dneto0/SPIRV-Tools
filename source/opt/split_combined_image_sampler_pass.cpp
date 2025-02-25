@@ -220,9 +220,11 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
         break;
       }
       case spv::Op::OpName:
+        // TODO(dneto): synthesize names for the remapped vars.
         dead_.push_back(use.user);
         break;
       default:
+        // TODO(dneto): OpFunctionCall
         std::cout << "unhandled user: " << *use.user << std::endl;
     }
   }
