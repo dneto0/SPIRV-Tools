@@ -62,6 +62,8 @@ class SplitCombinedImageSamplerPass : public Pass {
   spv_result_t EnsureSamplerTypeAppearsFirst();
   spv_result_t RemapVars();
   spv_result_t RemapVar(Instruction* var);
+  // Removes instructions queued up for removal during earlier processing
+  // stages.
   spv_result_t RemoveDeadInstructions();
 
   struct RemapInfo {
@@ -80,6 +82,8 @@ class SplitCombinedImageSamplerPass : public Pass {
   // A pointer-to-sampler instruction, if one existed already, or if we created
   // one.
   Instruction* ptr_sampler_type_ = nullptr;
+  // A pointer-to-sampled-image-type instruction, if one existed already.
+  Instruction* ptr_sampled_image_type_ = nullptr;
 
   // Maps the ID of a memory object declaration for a combined texture+sampler
   // to remapping information about that object.

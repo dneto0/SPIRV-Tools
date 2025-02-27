@@ -42,7 +42,9 @@ Pass::Status SplitCombinedImageSamplerPass::Process() {
   type_mgr_ = context()->get_type_mgr();
 
   FindCombinedTextureSamplers();
-  if (ordered_objs_.empty()) return Pass::Status::SuccessWithoutChange;
+  if (ordered_objs_.empty() && dead_.empty()) {
+    return Pass::Status::SuccessWithoutChange;
+  }
 
   CHECK(EnsureSamplerTypeAppearsFirst());
   CHECK(RemapVars());
@@ -66,6 +68,19 @@ void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
       case spv::Op::OpTypeSampler:
         // Note: In any case, valid modules can't have duplicate sampler types.
         sampler_type_ = &inst;
+        break;
+
+      case spv::Op::OpTypePointer:
+        if (static_cast<spv::StorageClass>(inst.GetSingleWordInOperand(0)) ==
+            spv::StorageClass::UniformConstant) {
+          auto* pointee = def_use_mgr_->GetDef(inst.GetSingleWordInOperand(1));
+          if (pointee->opcode() == spv::Op::OpTypeSampledImage) {
+            ptr_sampled_image_type_ = &inst;
+            dead_.push_back(&inst);
+          }
+          // TODO(dneto): Delete pointer to array-of-sampled-image-type, and
+          // pointer to runtime-array-of-sampled-image-type.
+        }
         break;
 
       case spv::Op::OpVariable: {

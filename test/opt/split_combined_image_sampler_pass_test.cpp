@@ -213,6 +213,68 @@ TEST_F(SplitCombinedImageSamplerPassTest, ImageOnly_NoChange) {
   EXPECT_EQ(disasm, kTest);
 }
 
+TEST_F(SplitCombinedImageSamplerPassTest, PtrSampledImageOnly_DeletesPtrType) {
+  const std::string kTest = Preamble() + BasicTypes() + R"(
+  ; CHECK: OpCapability Shader
+  ; CHECK-NOT: OpTypePointer UniformConstant
+  ; CHECK: OpFunction %void
+        %100 = OpTypeImage %float 2D 0 0 0 1 Unknown
+        %101 = OpTypeSampledImage %100
+        %102 = OpTypePointer UniformConstant %101
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+               OpReturn
+               OpFunctionEnd
+)";
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << "status";
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest,
+       DISABLED_PtrArraySampledImageOnly_DeletesPtrType) {
+  const std::string kTest = Preamble() + BasicTypes() + R"(
+  ; CHECK: OpCapability Shader
+  ; CHECK-NOT: OpTypePointer UniformConstant
+  ; CHECK: OpFunction %void
+        %100 = OpTypeImage %float 2D 0 0 0 1 Unknown
+        %101 = OpTypeSampledImage %100
+     %uint_1 = OpConstant %uint 1
+        %103 = OpTypeArray %101 %uint_1
+        %104 = OpTypePointer UniformConstant %103
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+               OpReturn
+               OpFunctionEnd
+)";
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << "status";
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest,
+       DISABLED_PtrRtArraySampledImageOnly_DeletesPtrType) {
+  const std::string kTest = Preamble() + BasicTypes() + R"(
+  ; CHECK: OpCapability Shader
+  ; CHECK-NOT: OpTypePointer UniformConstant
+  ; CHECK: OpFunction %void
+        %100 = OpTypeImage %float 2D 0 0 0 1 Unknown
+        %101 = OpTypeSampledImage %100
+        %103 = OpTypeRuntimeArray %101
+        %104 = OpTypePointer UniformConstant %103
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+               OpReturn
+               OpFunctionEnd
+)";
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest + NoCheck(), /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << "status";
+}
+
 TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
   // No OpTypeSampler to begin with.
   const std::string kTest = Preamble() +
