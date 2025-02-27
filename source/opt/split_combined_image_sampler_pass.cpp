@@ -47,6 +47,7 @@ Pass::Status SplitCombinedImageSamplerPass::Process() {
   }
 
   CHECK(EnsureSamplerTypeAppearsFirst());
+  CHECK(RemapFunctions());
   CHECK(RemapVars());
   CHECK(RemoveDeadInstructions());
 
@@ -75,7 +76,6 @@ void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
             spv::StorageClass::UniformConstant) {
           auto* pointee = def_use_mgr_->GetDef(inst.GetSingleWordInOperand(1));
           if (pointee->opcode() == spv::Op::OpTypeSampledImage) {
-            ptr_sampled_image_type_ = &inst;
             dead_.push_back(&inst);
           }
           // TODO(dneto): Delete pointer to array-of-sampled-image-type, and
@@ -89,6 +89,7 @@ void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
                 ptr_ty->GetVulkanResourcePointee(spv::Op::OpTypeSampledImage)) {
           ordered_objs_.push_back(&inst);
           auto& info = remap_info_[inst.result_id()];
+          info.var_type = ptr_ty;
           info.var_id = inst.result_id();
           info.sampled_image_type = combined_ty->result_id();
           info.image_type = def_use_mgr_->GetDef(info.sampled_image_type)
@@ -118,6 +119,14 @@ spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
   return SPV_SUCCESS;
 }
 
+spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
+  for (auto& inst : context()->types_values()) {
+    if (inst.opcode() == spv::Op::OpTypeFunction) {
+    }
+  }
+  return SPV_SUCCESS;
+}
+
 spv_result_t SplitCombinedImageSamplerPass::RemapVars() {
   for (Instruction* var : ordered_objs_) {
     CHECK_STATUS(RemapVar(var));
@@ -125,38 +134,69 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVars() {
   return SPV_SUCCESS;
 }
 
+std::pair<Instruction*, Instruction*>
+SplitCombinedImageSamplerPass::GetPtrSamplerAndPtrImageTypes(
+    Instruction& ptr_sampled_image_type) {
+  assert(sampler_type_);
+  assert(ptr_sampled_image_type.GetVulkanResourcePointee(
+             spv::Op::OpTypeSampledImage) != nullptr);
+
+  analysis::Type* ty = type_mgr_->GetType(ptr_sampled_image_type.result_id());
+  analysis::Pointer* ptr_combined_ty = ty->AsPointer();
+  assert(ptr_combined_ty);
+  assert(ptr_combined_ty->storage_class() ==
+         spv::StorageClass::UniformConstant);
+
+  auto* pointee_ty = ptr_combined_ty->pointee_type();
+  const analysis::SampledImage* combined_ty = pointee_ty->AsSampledImage();
+
+  // TODO(dneto): handle array-of-combined, runtime-array-of-combined
+
+  if (combined_ty) {
+    // The image type must have already existed.
+    auto* image_ty = def_use_mgr_->GetDef(
+        type_mgr_->GetTypeInstruction(combined_ty->image_type()));
+
+    // Create the pointer types as needed.
+    uint32_t ptr_sampler_ty_id = type_mgr_->FindPointerToType(
+        sampler_type_->result_id(), spv::StorageClass::UniformConstant);
+    uint32_t ptr_image_ty_id = type_mgr_->FindPointerToType(
+        image_ty->result_id(), spv::StorageClass::UniformConstant);
+
+    // By default they were created at the end of the types-and-global-vars
+    // list. Move them to just after the pointee type declaration.
+    auto* ptr_sampler_ty = def_use_mgr_->GetDef(ptr_sampler_ty_id);
+    auto* ptr_image_ty = def_use_mgr_->GetDef(ptr_image_ty_id);
+    ptr_sampler_ty->InsertAfter(sampler_type_);
+    ptr_image_ty->InsertAfter(image_ty);
+
+    // Update cross-references.
+    def_use_mgr_->AnalyzeInstUse(sampler_type_);
+    def_use_mgr_->AnalyzeInstUse(ptr_sampler_ty);
+    def_use_mgr_->AnalyzeInstUse(image_ty);
+    def_use_mgr_->AnalyzeInstUse(ptr_image_ty);
+
+    return {ptr_image_ty, ptr_sampler_ty};
+  }
+  return {};
+}
+
 spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
   // Create an image variable, and a sampler variable.
   InstructionBuilder builder(context(), var, IRContext::kAnalysisDefUse);
   auto& info = remap_info_[var->result_id()];
   assert(info.var_id == var->result_id());
-  assert(def_use_mgr_->GetDef(sampler_type_->result_id()));
-
-  // Create the pointer types as needed.
-  uint32_t sampler_ptr_ty_id = type_mgr_->FindPointerToType(
-      sampler_type_->result_id(), spv::StorageClass::UniformConstant);
-  uint32_t image_ptr_ty_id = type_mgr_->FindPointerToType(
-      info.image_type, spv::StorageClass::UniformConstant);
-
-  // By default they were created at the end of the types-and-global-vars list.
-  // Move them to just after the pointee type declaration.
-  auto* sampler_ptr_ty = def_use_mgr_->GetDef(sampler_ptr_ty_id);
-  auto* image_ptr_ty = def_use_mgr_->GetDef(image_ptr_ty_id);
-  auto* image_ty = def_use_mgr_->GetDef(info.image_type);
-
-  def_use_mgr_->AnalyzeInstUse(sampler_type_);
-  def_use_mgr_->AnalyzeInstUse(sampler_ptr_ty);
-  def_use_mgr_->AnalyzeInstUse(image_ty);
-  def_use_mgr_->AnalyzeInstUse(image_ptr_ty);
-
-  sampler_ptr_ty->InsertAfter(sampler_type_);
-  image_ptr_ty->InsertAfter(image_ty);
 
   // Create the variables.
-  Instruction* sampler_var =
-      builder.AddVariable(sampler_ptr_ty_id, SpvStorageClassUniformConstant);
-  Instruction* image_var =
-      builder.AddVariable(image_ptr_ty_id, SpvStorageClassUniformConstant);
+  auto [ptr_image_ty, ptr_sampler_ty] =
+      GetPtrSamplerAndPtrImageTypes(*info.var_type);
+  if (!ptr_image_ty) {
+    return Fail() << "unhandled case: array-of-combined-image-sampler";
+  }
+  Instruction* sampler_var = builder.AddVariable(
+      ptr_sampler_ty->result_id(), SpvStorageClassUniformConstant);
+  Instruction* image_var = builder.AddVariable(ptr_image_ty->result_id(),
+                                               SpvStorageClassUniformConstant);
 
   // SPIR-V has a Data rule:
   //  > All OpSampledImage instructions, or instructions that load an image or

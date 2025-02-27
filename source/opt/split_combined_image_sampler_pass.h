@@ -16,6 +16,7 @@
 #define LIBSPIRV_OPT_SPLIT_COMBINED_IMAGE_SAMPLER_PASS_H_
 
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "source/diagnostic.h"
@@ -59,14 +60,27 @@ class SplitCombinedImageSamplerPass : public Pass {
   // Populates obj_ and ordered_objs_;
   void FindCombinedTextureSamplers();
 
+  // Ensures a sampler type appears before any other type. Creates it if
+  // it does not yet exist.
   spv_result_t EnsureSamplerTypeAppearsFirst();
+  // Remaps function types and function declarations.  Each
+  // pointer-to-sampled-image-type operand is replaced with a pair of
+  // pointer-to-image-type and pointer-to-sampler-type pair.
+  spv_result_t RemapFunctions();
   spv_result_t RemapVars();
   spv_result_t RemapVar(Instruction* var);
   // Removes instructions queued up for removal during earlier processing
   // stages.
   spv_result_t RemoveDeadInstructions();
 
+  // Returns the pointer-to-image and pointer-to-sampler types corresponding
+  // the pointer-to-sampled-image-type. Creates them if needed, and updates
+  // the def-use-manager.
+  std::pair<Instruction*, Instruction*> GetPtrSamplerAndPtrImageTypes(
+      Instruction& ptr_sample_image_type);
+
   struct RemapInfo {
+    Instruction* var_type = nullptr;
     uint32_t var_id = 0;
     uint32_t sampled_image_type = 0;
     uint32_t image_type = 0;
@@ -79,11 +93,6 @@ class SplitCombinedImageSamplerPass : public Pass {
 
   // An OpTypeSampler instruction, if one existed already, or if we created one.
   Instruction* sampler_type_ = nullptr;
-  // A pointer-to-sampler instruction, if one existed already, or if we created
-  // one.
-  Instruction* ptr_sampler_type_ = nullptr;
-  // A pointer-to-sampled-image-type instruction, if one existed already.
-  Instruction* ptr_sampled_image_type_ = nullptr;
 
   // Maps the ID of a memory object declaration for a combined texture+sampler
   // to remapping information about that object.
