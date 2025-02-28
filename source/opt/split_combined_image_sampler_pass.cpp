@@ -280,6 +280,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
       ptr_sampler_ty->result_id(), SpvStorageClassUniformConstant);
   Instruction* image_var = builder.AddVariable(ptr_image_ty->result_id(),
                                                SpvStorageClassUniformConstant);
+  modified_ = true;
 
   // SPIR-V has a Data rule:
   //  > All OpSampledImage instructions, or instructions that load an image or
@@ -314,7 +315,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
             builder.AddLoad(ptr_sampler_ty->GetSingleWordInOperand(1),
                             sampler_var->result_id());
         auto* sampled_image = builder.AddSampledImage(
-            mem_obj->type_id(), image->result_id(), sampler->result_id());
+            load->type_id(), image->result_id(), sampler->result_id());
         this->def_use_mgr_->ForEachUse(
             load, [&](Instruction* user, uint32_t index) {
               user->SetOperand(index, {sampled_image->result_id()});
@@ -378,9 +379,12 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
 }
 
 spv_result_t SplitCombinedImageSamplerPass::RemoveDeadInstructions() {
+  for (auto dead_type_id : combined_types_to_remove_) {
+    dead_.push_back(def_use_mgr_->GetDef(dead_type_id));
+  }
+  modified_ = modified_ || !dead_.empty();
   for (Instruction* inst : dead_) {
     def_use_mgr_->ClearInst(inst);
-    // TODO delete dead type from type manager.
   }
   for (Instruction* inst : dead_) {
     inst->RemoveFromList();

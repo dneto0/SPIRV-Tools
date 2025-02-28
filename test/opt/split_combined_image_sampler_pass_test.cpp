@@ -275,7 +275,8 @@ TEST_F(SplitCombinedImageSamplerPassTest,
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << "status";
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
+TEST_F(SplitCombinedImageSamplerPassTest,
+       Combined_NoSampler_CreatedBeforeSampledImage) {
   // No OpTypeSampler to begin with.
   const std::string kTest = Preamble() +
                             R"(               OpDecorate %100 DescriptorSet 0
@@ -284,45 +285,13 @@ TEST_F(SplitCombinedImageSamplerPassTest, Combined_NoSampler_CreatedAtFront) {
      ; A sampler type is created and placed at the start of types.
      ; CHECK: OpDecorate %{{\d+}} Binding 0
      ; CHECK: OpDecorate %{{\d+}} Binding 0
-     ; CHECK-NEXT: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK-NOT: TypeSampledImage
+     ; CHECK: TypeSampler
+     ; CHECK: TypeSampledImage
 
-               %bool = OpTypeBool ; location marker
 )" + BasicTypes() + R"( %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
          %11 = OpTypeSampledImage %10
 %_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
-
-        %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
-       %main = OpFunction %void None %voidfn
-     %main_0 = OpLabel
-          %6 = OpLoad %11 %100
-               OpReturn
-               OpFunctionEnd
-)";
-  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest, /* do_validation= */ true);
-  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
-}
-
-TEST_F(SplitCombinedImageSamplerPassTest, Combined_Sampler_MovedToFront) {
-  // No OpTypeSampler to begin with.
-  const std::string kTest = Preamble() +
-                            R"(               OpDecorate %100 DescriptorSet 0
-               OpDecorate %100 Binding 0
-
-     ; The sampler type is moved to the front.
-     ; CHECK: OpDecorate %{{\d+}} Binding 0
-     ; CHECK: OpDecorate %{{\d+}} Binding 0
-     ; CHECK-NEXT: %99 = OpTypeSampler
-     ; CHECK-NOT: OpTypeSampler
-     ; CHECK: OpFunction %void
-
-               %bool = OpTypeBool ; location marker
-)" + BasicTypes() +
-                            R"(%10 = OpTypeImage %float 2D 0 0 0 1 Unknown
-         %11 = OpTypeSampledImage %10
-%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
-
-        %99 = OpTypeSampler
 
         %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
        %main = OpFunction %void None %voidfn
@@ -350,15 +319,10 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
      ; CHECK: OpDecorate %[[image_var]] Binding 0
      ; CHECK: OpDecorate %[[sampler_var]] Binding 0
 
-     ; A sampler type is created and placed at the start of types, and its pointer
-     ; type follows immediately.
-     ; CHECK-NEXT: %[[sampler_ty:\d+]] = OpTypeSampler
-     ; CHECK-NEXT: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
-
-     ; The image pointer type follows the image type.
      ; CHECK: %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
-     ; type follows immediately.
-     ; CHECK-NEXT: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+     ; CHECK: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
 
      ; The combined image variable is replaced by an image variable and a sampler variable.
 
@@ -472,10 +436,10 @@ TEST_P(SplitCombinedImageSamplerPassEntryPointRemapTest,
 ; CHECK: OpExecutionMode %main OriginUpperLeft
 
      ; Check the var names, tracing up through the types.
-     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
-     ; CHECK-NEXT: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
      ; CHECK: %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
      ; CHECK: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
      ; The combined image variable is replaced by an image variable and a sampler variable.
      ; CHECK-DAG: )" + sampler_var_def +
                             R"( = OpVariable %[[sampler_ptr_ty]] UniformConstant
