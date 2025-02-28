@@ -79,18 +79,18 @@ class Function {
   // Does nothing if the function doesn't have such a parameter.
   inline void RemoveParameter(uint32_t id);
 
+#if 0
   // Rewrites the function parameters by calling a replacer callback.
   // The replacer takes two parameters: an expiring unique pointer to a current
   // instruction, and a back-inserter into a new list of unique pointers to
   // instructions.  The replacer is called for each current parameter, in order.
   // Not valid to call while also iterating through the parameter list, e.g.
   // within the ForEachParam method.
-  void RewriteParams(const std::function <
-                         void(std::unique_ptr<Instruction>&&,
-                              std::back_inserter<ParamList>&) &
-                     replacer) {
+  void RewriteParams(std::function <void(
+                                      std::unique_ptr<Instruction>&&,
+                                      std::back_inserter<ParamList>&)>& replacer) {
     ParamList new_params;
-    std::back_inserter appender(new_params);
+    std::back_inserter<ParamList> appender(new_params);
     for (auto& param : params_) {
       replacer(std::move(param), appender);
       param.reset();
@@ -98,6 +98,7 @@ class Function {
     params_.clear();
     params_ = std::move(new_params);
   }
+#endif
 
   // Saves the given function end instruction.
   inline void SetFunctionEnd(std::unique_ptr<Instruction> end_inst);

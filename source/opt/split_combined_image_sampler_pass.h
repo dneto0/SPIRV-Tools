@@ -67,8 +67,8 @@ class SplitCombinedImageSamplerPass : public Pass {
   // pointer-to-sampled-image-type operand is replaced with a pair of
   // pointer-to-image-type and pointer-to-sampler-type pair.
   spv_result_t RemapFunctions();
-  spv_result_t RemapMemObjs();
-  spv_result_t RemapMemObj(Instruction* mem_obj);
+  spv_result_t RemapVars();
+  spv_result_t RemapVar(Instruction* mem_obj);
   // Removes instructions queued up for removal during earlier processing
   // stages.
   spv_result_t RemoveDeadInstructions();
@@ -100,6 +100,13 @@ class SplitCombinedImageSamplerPass : public Pass {
   // We use this to know when a new such value was created.
   std::unordered_set<uint32_t> known_globals_;
 
+  // Combined types.  The known combined sampled-image type,
+  // and recursively pointers or arrays of them.
+  std::unordered_set<uint32_t> combined_types_;
+  // The pre-existing types this pass should remove: pointer to
+  // combined type, array of combined type, pointer to array of combined type.
+  std::vector<uint32_t> combined_types_to_remove_;
+
   // Remaps a combined-kind type to corresponding sampler-kind and image-kind
   // of type.
   struct TypeRemapInfo {
@@ -121,7 +128,7 @@ class SplitCombinedImageSamplerPass : public Pass {
   // as the given combined-like type.  If combined_kind_type is not a type
   // or a pointer to one, then returns a pair of null pointer.
   // Either both components are non-null, or both components are null.
-  std::pair<Instruction*, Instruction*> void SplitType(
+  std::pair<Instruction*, Instruction*> SplitType(
       Instruction& combined_kind_type);
 
   struct RemapValueInfo {
@@ -129,17 +136,11 @@ class SplitCombinedImageSamplerPass : public Pass {
     Instruction* combined_mem_obj = nullptr;
     // The instruction for the type of the original (combined) memory object.
     Instruction* combined_mem_obj_type = nullptr;
-#if 0
-    // The OpTypeSampledImage instruction.
-    Instruction* combined_type = nullptr;
-    // The OpTypeImage instruction
-    Instruction* image_type = 0;
-#endif
   };
 
   // Maps the ID of a memory object declaration for a combined texture+sampler
   // to remapping information about that object.
-  std::unordered_map<uint32_t, RemapInfo> remap_info_;
+  std::unordered_map<uint32_t, RemapValueInfo> remap_info_;
   // The instructions added to remap_info_, in the order they were added.
   std::vector<Instruction*> ordered_objs_;
 
