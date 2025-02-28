@@ -42,19 +42,18 @@ Pass::Status SplitCombinedImageSamplerPass::Process() {
   type_mgr_ = context()->get_type_mgr();
 
   FindCombinedTextureSamplers();
-  if (ordered_objs_.empty() && dead_.empty()) {
-    return Pass::Status::SuccessWithoutChange;
+  if (!first_sampled_image_type_ || num_to_delete_ == 0) {
+    return Ok();
   }
 
-  CHECK(EnsureSamplerTypeAppearsFirst());
-  CHECK(RemapFunctions());
-  CHECK(RemapVars());
+  // CHECK(RemapFunctions());
+  CHECK(RemapMemObjs());
   CHECK(RemoveDeadInstructions());
 
   def_use_mgr_ = nullptr;
   type_mgr_ = nullptr;
 
-  return Pass::Status::SuccessWithChange;
+  return Ok();
 }
 
 spvtools::DiagnosticStream SplitCombinedImageSamplerPass::Fail() {
@@ -65,35 +64,30 @@ spvtools::DiagnosticStream SplitCombinedImageSamplerPass::Fail() {
 
 void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
   for (auto& inst : context()->types_values()) {
+    known_globals_.insert(inst.result_id());
     switch (inst.opcode()) {
       case spv::Op::OpTypeSampler:
-        // Note: In any case, valid modules can't have duplicate sampler types.
-        sampler_type_ = &inst;
+        // Note: The "if" should be redundant because valid modules can't have
+        // duplicate sampler types.
+        if (!sampler_type_) {
+          sampler_type_ = &inst;
+        }
         break;
 
-      case spv::Op::OpTypePointer:
-        if (static_cast<spv::StorageClass>(inst.GetSingleWordInOperand(0)) ==
-            spv::StorageClass::UniformConstant) {
-          auto* pointee = def_use_mgr_->GetDef(inst.GetSingleWordInOperand(1));
-          if (pointee->opcode() == spv::Op::OpTypeSampledImage) {
-            dead_.push_back(&inst);
-          }
-          // TODO(dneto): Delete pointer to array-of-sampled-image-type, and
-          // pointer to runtime-array-of-sampled-image-type.
+      case spv::Op::OpTypeSampledImage:
+        if (!first_sampled_image_type_) {
+          first_sampled_image_type_ = &inst;
         }
         break;
 
       case spv::Op::OpVariable: {
         Instruction* ptr_ty = def_use_mgr_->GetDef(inst.type_id());
-        if (Instruction* combined_ty =
-                ptr_ty->GetVulkanResourcePointee(spv::Op::OpTypeSampledImage)) {
+        auto [image_ty, sampler_ty] = SplitType(*ptr_ty);
+        if (image_ty && sampler_ty) {
           ordered_objs_.push_back(&inst);
           auto& info = remap_info_[inst.result_id()];
-          info.var_type = ptr_ty;
-          info.var_id = inst.result_id();
-          info.sampled_image_type = combined_ty->result_id();
-          info.image_type = def_use_mgr_->GetDef(info.sampled_image_type)
-                                ->GetSingleWordInOperand(0);
+          info.combined_mem_obj = &inst;
+          info.combined_mem_obj_type = ptr_ty;
         }
         break;
       }
@@ -101,95 +95,160 @@ void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
   }
 }
 
-spv_result_t SplitCombinedImageSamplerPass::EnsureSamplerTypeAppearsFirst() {
-  // Put it at the start of the types-and-values list:
-  // It depends on nothing, and other things will depend on it.
+Instruction* SplitCombinedImageSamplerPass::GetSamplerType() {
   if (!sampler_type_) {
     analysis::Sampler s;
     uint32_t sampler_type_id = type_mgr_->GetTypeInstruction(&s);
-    if (sampler_type_id == 0) {
-      return Fail() << "could not create a sampler type: ran out of IDs?";
-    }
     sampler_type_ = def_use_mgr_->GetDef(sampler_type_id);
+    assert(first_sampled_image_type_);
+    sampler_type_->InsertBefore(first_sampled_image_type_);
+    known_globals_.insert(sampler_type->result_id());
+    modified_ = true;
   }
-  Instruction* first_type_val = &*(context()->types_values_begin());
-  if (sampler_type_ != first_type_val) {
-    sampler_type_->InsertBefore(first_type_val);
-  }
-  return SPV_SUCCESS;
+  return sampler_type_;
 }
 
+#if 0
 spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
+  std::unordered_set<Instruction*> reanalyze_set;
+  // Rewrite parameters in the function types.
   for (auto& inst : context()->types_values()) {
     if (inst.opcode() == spv::Op::OpTypeFunction) {
+      // 0th operand is the result type, so start from 1.
+      for (uint32_t i = 1; i < inst.NumInOperands(); i++) {
+        auto param_id = inst.GetSingleWordInOperand(i);
+        auto where = ptr_combined_ty_.find(param_id);
+        if (where!= ptr_combined_ty_.end()) {
+          // Replace with ptr-image then ptr-sampler.
+          Instruction* ptr_combined_ty = where->second;
+          auto [ptr_image_ty, ptr_sampler_ty] = GetPtrSamplerAndPtrImageTypes(*ptr_combined_ty);
+          inst.SetOperand(i, {{SPV_OPERAND_TYPE_TYPE_ID, ptr_sampler_ty->result_id()}});
+          inst.InsertOperand(i, {{SPV_OPERAND_TYPE_TYPE_ID, ptr_image_ty->result_id()}});
+          reanalyze_set.insert(ptr_image_ty);
+          reanalyze_set.insert(ptr_sampler_ty);
+          reanalyze_set.insert(&inst);
+          i++; // Skip over these two operands
+        }
+      }
     }
   }
+  // Rewite OpFunctionParameter in function definitions.
+  for (Function* fn : context()->module()) {
+    struct CombinedParam {
+      Instruction* param;
+      Instruction* param_ty;
+      Instruction* ptr_image_ty;
+      Instruction* ptr_sampler_ty;
+    };
+    std::vector<CombinedParam> to_replace;
+    fn->ForEachParam([&](Instruction* param) {
+      Instruction* param_ty = def_use_mgr_->GetDef(param->type_id());
+      if (Instruction* combined_ty =
+                param_ty->type_id())->GetVulkanResourcePointee(spv::Op::OpTypeSampledImage) {
+        auto [ptr_image_ty, ptr_sampler_ty] = GetPtrSamplerAndPtrImageTypes(*combined_ty);
+        to_replace.push_back({param, param_ty, ptr_image_ty, ptr_sampler_ty});
+      }
+    });
+    if (to_replace.empty()) {
+      continue;
+    }
+
+    Instruction* entry_label_inst = *(fn->begin()->begin());
+    assert(entry_label_inst);
+    assert(entry_label_inst->opcode() == spv::Op::OpLabel);
+    InstructionBuilder builder(context(), entry_label_inst->NextNode(), IRContext::kAnalysisDefUse);
+    auto replace_iter = to_replace.begin();
+    fn->RewriteParams([&](std::unique_ptr<Instruction>&& expiring_param, std::back_inserter<ParamList>& appender) {
+      std::unique_ptr<Instruction> param{expiring_param};
+      if (replace_iter == to_replace.end() || replace_iter->param != param.get()) {
+        appender(std::move(param));
+      } else {
+        // TODO
+        auto& info = remap_info_[param.result_id()];
+        info.
+      }
+    });
+    // Rewrite the list
+    std::vector<std::unique_ptr<Instruction>> new_params;
+  }
+  for (auto* inst: reanalyze_set) {
+    def_use_mgr_->AnalyzeInstDefUse(inst);
+  }
   return SPV_SUCCESS;
 }
+#endif
 
-spv_result_t SplitCombinedImageSamplerPass::RemapVars() {
-  for (Instruction* var : ordered_objs_) {
-    CHECK_STATUS(RemapVar(var));
+spv_result_t SplitCombinedImageSamplerPass::RemapMemObjs() {
+  for (Instruction* mem_obj : ordered_objs_) {
+    CHECK_STATUS(RemapMemObj(mem_obj));
   }
   return SPV_SUCCESS;
 }
 
-std::pair<Instruction*, Instruction*>
-SplitCombinedImageSamplerPass::GetPtrSamplerAndPtrImageTypes(
-    Instruction& ptr_sampled_image_type) {
-  assert(sampler_type_);
-  assert(ptr_sampled_image_type.GetVulkanResourcePointee(
-             spv::Op::OpTypeSampledImage) != nullptr);
-
-  analysis::Type* ty = type_mgr_->GetType(ptr_sampled_image_type.result_id());
-  analysis::Pointer* ptr_combined_ty = ty->AsPointer();
-  assert(ptr_combined_ty);
-  assert(ptr_combined_ty->storage_class() ==
-         spv::StorageClass::UniformConstant);
-
-  auto* pointee_ty = ptr_combined_ty->pointee_type();
-  const analysis::SampledImage* combined_ty = pointee_ty->AsSampledImage();
-
-  // TODO(dneto): handle array-of-combined, runtime-array-of-combined
-
-  if (combined_ty) {
-    // The image type must have already existed.
-    auto* image_ty = def_use_mgr_->GetDef(
-        type_mgr_->GetTypeInstruction(combined_ty->image_type()));
-
-    // Create the pointer types as needed.
-    uint32_t ptr_sampler_ty_id = type_mgr_->FindPointerToType(
-        sampler_type_->result_id(), spv::StorageClass::UniformConstant);
-    uint32_t ptr_image_ty_id = type_mgr_->FindPointerToType(
-        image_ty->result_id(), spv::StorageClass::UniformConstant);
-
-    // By default they were created at the end of the types-and-global-vars
-    // list. Move them to just after the pointee type declaration.
-    auto* ptr_sampler_ty = def_use_mgr_->GetDef(ptr_sampler_ty_id);
-    auto* ptr_image_ty = def_use_mgr_->GetDef(ptr_image_ty_id);
-    ptr_sampler_ty->InsertAfter(sampler_type_);
-    ptr_image_ty->InsertAfter(image_ty);
-
-    // Update cross-references.
-    def_use_mgr_->AnalyzeInstUse(sampler_type_);
-    def_use_mgr_->AnalyzeInstUse(ptr_sampler_ty);
-    def_use_mgr_->AnalyzeInstUse(image_ty);
-    def_use_mgr_->AnalyzeInstUse(ptr_image_ty);
-
-    return {ptr_image_ty, ptr_sampler_ty};
+std::pair<Instruction*, Instruction*> SplitCombinedImageSamplerPass::SplitType(
+    Instruction& combined_kind_type) {
+  if (auto where = type_remap_.find(combined_kind_type.result_id());
+      where != type_remap_.end()) {
+    return {where->image_kind_type, where->sampler_kind_type};
   }
-  return {};
+
+  switch (combined_kind_type.opcode()) {
+    case spv::Op::OpTypeSampledImage: {
+      auto* image_type =
+          def_usg_mgr_->GetDef(combined_kind_type.GetSingleWordInOperand(0));
+      auto* sampler_type = GetSamplerType();
+      type_remap_[combined_kind_type.result_id()] = {&combined_kind_type,
+                                                     image_type, sampler_type};
+      return {image_type, sampler_type};
+      break;
+    }
+    case spv::Op::OpTypePointer: {
+      auto sc = static_cast<spv::StorageClass>(
+          combined_kind_type.GetSingleWordInOperand(0));
+      if (sc == spv::StorageClass::UniformConstant) {
+        auto* pointee =
+            def_use_mgr_->GetDef(combined_kind_type.GetSingleWordInOperand(1));
+        auto [image_pointee, sampler_pointee] = SplitType(*pointee);
+        if (image_pointee && sampler_pointee) {
+          auto* make_pointer = [&](Instruction* pointee) {
+            uint32_t ptr_id = type_mgr_->FindPointerToType(
+                pointee->result_id(), spv::StorageClass::UniformConstant);
+            auto* ptr = def_use_mgr_->GetDef(ptr_id);
+            if (known_globals_.find(ptr_id) == known_globals_.end()) {
+              // The pointer type was created at the end. Put it right after the
+              // pointee.
+              pointee->MoveAfter(ptr);
+              known_globals_.insert(ptr_id);
+              def_use_mgr_->AnalyzeInstUse(pointee);
+              modified_ = true;
+            }
+            return ptr;
+          };
+          auto* ptr_image = make_pointer(image_pointee);
+          auto* ptr_sampler = make_pointer(sampler_pointee);
+          type_remap_[combined_kind_type.result_id()] = {
+              &combined_kind_type, ptr_image, ptr_sampler};
+          num_to_delete_++;
+          // dead_.push_back(&combined_kind_type); // Schedule for deletion.
+          return {ptr_image, ptr_sampler};
+        }
+      }
+      break;
+    }
+    // TODO(dneto): handle arrays
+    default:
+      break;
+  }
+  return {nullptr, nullptr};
 }
 
-spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
+spv_result_t SplitCombinedImageSamplerPass::RemapMemObj(Instruction* mem_obj) {
   // Create an image variable, and a sampler variable.
-  InstructionBuilder builder(context(), var, IRContext::kAnalysisDefUse);
-  auto& info = remap_info_[var->result_id()];
-  assert(info.var_id == var->result_id());
+  InstructionBuilder builder(context(), mem_obj, IRContext::kAnalysisDefUse);
+  auto& info = remap_info_[mem_obj->result_id()];
 
   // Create the variables.
-  auto [ptr_image_ty, ptr_sampler_ty] =
-      GetPtrSamplerAndPtrImageTypes(*info.var_type);
+  auto [ptr_image_ty, ptr_sampler_ty] = SplitType(*info.combined_mem_obj_type);
   if (!ptr_image_ty) {
     return Fail() << "unhandled case: array-of-combined-image-sampler";
   }
@@ -213,7 +272,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
     uint32_t index;
   };
   std::vector<Use> uses;
-  def_use_mgr_->ForEachUse(var, [&](Instruction* user, uint32_t use_index) {
+  def_use_mgr_->ForEachUse(mem_obj, [&](Instruction* user, uint32_t use_index) {
     uses.push_back({user, use_index});
   });
 
@@ -225,11 +284,14 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* var) {
                         << " on load" << *use.user;
         Instruction* load = use.user;
         builder.SetInsertPoint(load);
-        auto* image = builder.AddLoad(info.image_type, image_var->result_id());
-        auto* sampler = builder.AddLoad(sampler_type_->result_id(),
-                                        sampler_var->result_id());
-        auto* sampled_image = builder.AddSampledImage(
-            info.sampled_image_type, image->result_id(), sampler->result_id());
+        auto* image = builder.AddLoad(ptr_image_ty->GetSingleWordInOperand(1),
+                                      image_var->result_id());
+        auto* sampler =
+            builder.AddLoad(ptr_sampler_ty->GetSingleWordInOperand(1),
+                            sampler_var->result_id());
+        auto* sampled_image =
+            builder.AddSampledImage(info.combined_mem_obj_type->result_id(),
+                                    image->result_id(), sampler->result_id());
         this->def_use_mgr_->ForEachUse(
             load, [&](Instruction* user, uint32_t index) {
               user->SetOperand(index, {sampled_image->result_id()});
