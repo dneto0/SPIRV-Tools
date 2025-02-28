@@ -233,7 +233,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, PtrSampledImageOnly_DeletesPtrType) {
 }
 
 TEST_F(SplitCombinedImageSamplerPassTest,
-       DISABLED_PtrArraySampledImageOnly_DeletesPtrType) {
+       PtrArraySampledImageOnly_DeletesPtrType) {
   const std::string kTest = Preamble() + BasicTypes() + R"(
   ; CHECK: OpCapability Shader
   ; CHECK-NOT: OpTypePointer UniformConstant
@@ -255,7 +255,7 @@ TEST_F(SplitCombinedImageSamplerPassTest,
 }
 
 TEST_F(SplitCombinedImageSamplerPassTest,
-       DISABLED_PtrRtArraySampledImageOnly_DeletesPtrType) {
+       PtrRtArraySampledImageOnly_DeletesPtrType) {
   const std::string kTest = Preamble() + BasicTypes() + R"(
   ; CHECK: OpCapability Shader
   ; CHECK-NOT: OpTypePointer UniformConstant
