@@ -364,17 +364,18 @@ INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,
                          SplitCombinedImageSamplerPassTypeCaseTest,
                          ::testing::ValuesIn(ImageTypeCases()));
 
+// Remap entry point
+
 struct EntryPointRemapCase {
   const spv_target_env environment = SPV_ENV_VULKAN_1_0;
   const char* initial_interface = "";
   const char* expected_interface = nullptr;
-  const bool expect_success = true;
 };
 
 std::ostream& operator<<(std::ostream& os, const EntryPointRemapCase& eprc) {
-  os << "(init " << eprc.initial_interface << " -> expect "
-     << eprc.expected_interface << ", expect "
-     << (eprc.expect_success ? "success" : "failure") << ")";
+  os << "(env " << spvLogStringForEnv(eprc.environment) << ", init "
+     << eprc.initial_interface << " -> expect " << eprc.expected_interface
+     << ")";
   return os;
 }
 
