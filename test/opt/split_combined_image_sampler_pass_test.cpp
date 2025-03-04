@@ -37,7 +37,6 @@ struct SplitCombinedImageSamplerPassTest : public PassTest<::testing::Test> {
 struct TypeCase {
   const char* glsl_type;
   const char* image_type_decl;
-  const char* sample;
 };
 std::ostream& operator<<(std::ostream& os, const TypeCase& tc) {
   os << tc.glsl_type;
@@ -57,9 +56,7 @@ struct SplitCombinedImageSamplerPassTypeCaseTest
 
 std::vector<TypeCase> ImageTypeCases() {
   return std::vector<TypeCase>{
-      {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown",
-       "OpImageSampleExplicitLod %v4float %combined %13 Lod %float_0"},
-#if 0
+      {"sampler2D", "OpTypeImage %float 2D 0 0 0 1 Unknown"},
       {"sampler2DShadow", "OpTypeImage %float 2D 1 0 0 1 Unknown"},
       {"sampler2DArray", "OpTypeImage %float 2D 0 1 0 1 Unknown"},
       {"sampler2DArrayShadow", "OpTypeImage %float 2D 1 1 0 1 Unknown"},
@@ -92,7 +89,6 @@ std::vector<TypeCase> ImageTypeCases() {
       {"usamplerCubeShadow", "OpTypeImage %uint Cube 1 0 0 1 Unknown"},
       {"usamplerCubeArray", "OpTypeImage %uint Cube 0 1 0 1 Unknown"},
       {"usamplerCubeArrayShadow", "OpTypeImage %uint Cube 1 1 0 1 Unknown"},
-#endif
   };
 }
 
@@ -319,7 +315,7 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
      ; CHECK: OpDecorate %[[image_var]] Binding 0
      ; CHECK: OpDecorate %[[sampler_var]] Binding 0
 
-     ; CHECK: %10 = OpTypeImage %float 2D 0 0 0 1 Unknown
+     ; CHECK: %10 = OpTypeImage %
      ; CHECK: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
      ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
      ; CHECK: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
@@ -337,9 +333,6 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
      ; CHECK: %[[s:\d+]] = OpLoad %[[sampler_ty]] %[[sampler_var]]
      ; CHECK: %combined = OpSampledImage %11 %[[im]] %[[s]]
 
-     ; Uses of the combined image sampler are preserved.
-     ; CHECK: OpImageSampleExplicitLod %{{.*}} %combined
-
                %bool = OpTypeBool ; location marker
 )" + BasicTypes() +
                             " %10 = " + GetParam().image_type_decl + R"(
@@ -350,8 +343,11 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
        %main = OpFunction %void None %voidfn
      %main_0 = OpLabel
    %combined = OpLoad %11 %100
-          %7 = )" + GetParam().sample +
-                            R"(
+
+     ; Uses of the combined image sampler are preserved.
+     ; CHECK: OpCopyObject %11 %combined
+
+          %7 = OpCopyObject %11 %combined
                OpReturn
                OpFunctionEnd
 )";
