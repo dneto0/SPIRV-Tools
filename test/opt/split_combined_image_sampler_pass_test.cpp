@@ -139,9 +139,9 @@ std::string BasicTypes() {
 )";
 }
 std::string Main() {
-  return R"(       %voidfn = OpTypeFunction %void
+  return R"(
        %main = OpFunction %void None %voidfn
-          %6 = OpLabel
+     %main_0 = OpLabel
                OpReturn
                OpFunctionEnd
 )";
@@ -659,6 +659,120 @@ TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, Samples) {
 INSTANTIATE_TEST_SUITE_P(FunctionTypeRemap,
                          SplitCombinedImageSamplerPassFunctionTypeTest,
                          ::testing::ValuesIn(FunctionTypeCases()));
+
+// Remap function bodies
+
+std::string NamedITypes(){
+  return R"(
+      OpName %f "f"
+      OpName %f_ty "f_ty"
+      OpName %i_ty "i_ty"
+      OpName %s_ty "s_ty"
+      OpName %si_ty "si_ty"
+      OpName %p_i_ty "p_i_ty"
+      OpName %p_s_ty "p_s_ty"
+      OpName %p_si_ty "p_si_ty"
+)";
+}
+
+std::string ITypes(){
+  return R"(
+      %i_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
+      %s_ty = OpTypeSampler
+      %si_ty = OpTypeSampledImage %i_ty
+      %p_i_ty = OpTypePointer UniformConstant %i_ty
+      %p_s_ty = OpTypePointer UniformConstant %s_ty
+      %p_si_ty = OpTypePointer UniformConstant %si_ty
+)";
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_ScalarNoChange) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %float %i_ty %s_ty %p_i_ty %p_s_ty
+      %f_ty = OpTypeFunction %float %i_ty %s_ty %p_i_ty %p_s_ty
+
+      ; CHECK: %f = OpFunction %float None %f_ty
+      ; CHECK-NEXT: OpFunctionParameter %i_ty
+      ; CHECK-NEXT: OpFunctionParameter %s_ty
+      ; CHECK-NEXT: OpFunctionParameter %p_i_ty
+      ; CHECK-NEXT: OpFunctionParameter %p_s_ty
+      ; CHECK-NEXT: OpLabel
+      %f = OpFunction %float None %f_ty
+      %100 = OpFunctionParameter %i_ty
+      %101 = OpFunctionParameter %s_ty
+      %102 = OpFunctionParameter %p_i_ty
+      %103 = OpFunctionParameter %p_s_ty
+      %110 = OpLabel
+      OpReturnValue %float_0
+      OpFunctionEnd
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %float %uint %i_ty %s_ty %float
+      %f_ty = OpTypeFunction %float %uint %si_ty %float
+
+      ; CHECK: %f = OpFunction %float None %f_ty
+      ; CHECK-NEXT: OpFunctionParameter %uint
+      ; CHECK-NEXT: %[[i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: OpFunctionParameter %float
+      ; CHECK-NEXT: OpLabel
+      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %[[i]] %[[s]]
+      ; CHECK-NEXT: %201 = %si_ty %[[si]]
+      %f = OpFunction %float None %f_ty
+      %100 = OpFunctionParameter %uint
+      %101 = OpFunctionParameter %si_ty
+      %110 = OpFunctionParameter %float
+      %120 = OpLabel
+      %201 = OpCopyObject %si_ty %101
+      OpReturnValue %float_0
+      OpFunctionEnd
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, DISABLED_FunctionBody_PtrSampledImage) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %float %uint %p_i_ty %p_s_ty %float
+      %f_ty = OpTypeFunction %float %uint %p_si_ty %float
+
+      ; CHECK: %f = OpFunction %float None %f_ty
+      ; CHECK-NEXT: OpFunctionParameter %uint
+      ; CHECK-NEXT: %[[pi:\w+]] = OpFunctionParameter %p_i_ty
+      ; CHECK-NEXT: %[[ps:\w+]] = OpFunctionParameter %p_s_ty
+      ; CHECK-NEXT: OpFunctionParameter %float
+      ; CHECK-NEXT: OpLabel
+      ; CHECK-NEXT: %[[i:\w+]] = OpLoad %i_ty %[[pi]]
+      ; CHECK-NEXT: %[[s:\w+]] = OpLoad %s_ty %[[ps]]
+      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %[[i]] %[[s]]
+      ; CHECK-NEXT: %130 = OpCopyObject %[[si]]
+      %f = OpFunction %float None %f_ty
+      %100 = OpFunctionParameter %uint
+      %101 = OpFunctionParameter %p_si_ty
+      %110 = OpFunctionParameter %float
+      %120 = OpLabel
+      %si = OpLoad %si_ty %101
+      %130 = OpCopyObject %si_ty %si
+      OpReturnValue %float_0
+      OpFunctionEnd
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
 
 }  // namespace
 }  // namespace opt
