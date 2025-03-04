@@ -145,9 +145,12 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
           auto [image_type, sampler_type] = SplitType(*param_type);
           assert(image_type);
           assert(sampler_type);
-          inst.SetOperand(i, {sampler_type->result_id()});
-          inst.InsertOperand(i, {spv_operand_type_t::SPV_OPERAND_TYPE_ID,
-                                 {image_type->result_id()}});
+          // Add one because the set and insert methods count both in and out
+          // operands.
+          inst.SetOperand(i + 1, {sampler_type->result_id()});
+          inst.InsertOperand(i + 1, {spv_operand_type_t::SPV_OPERAND_TYPE_ID,
+                                     {image_type->result_id()}});
+          i++;
           reanalyze_set.insert(image_type);
           reanalyze_set.insert(sampler_type);
           reanalyze_set.insert(&inst);
@@ -376,7 +379,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
         break;
       default:
         // TODO(dneto): OpFunctionCall
-        std::cout << "unhandled user: " << *use.user << std::endl;
+        return Fail() << "unhandled user: " << *use.user;
     }
   }
   // We've added new uses of the new variables.
@@ -388,8 +391,16 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
 }
 
 spv_result_t SplitCombinedImageSamplerPass::RemoveDeadInstructions() {
+  auto result = SPV_SUCCESS;
   for (auto dead_type_id : combined_types_to_remove_) {
-    dead_.push_back(def_use_mgr_->GetDef(dead_type_id));
+    auto* ty = def_use_mgr_->GetDef(dead_type_id);
+    dead_.push_back(ty);
+    def_use_mgr_->ForEachUse(ty, [&](Instruction* user, uint32_t use_index) {
+      if (user->opcode() == spv::Op::OpName) {
+        dead_.push_back(user);
+      }
+    });
+    CHECK_STATUS(result);
   }
   modified_ = modified_ || !dead_.empty();
   for (Instruction* inst : dead_) {

@@ -584,6 +584,86 @@ INSTANTIATE_TEST_SUITE_P(EntryPointRemap,
                          SplitCombinedImageSamplerPassEntryPointRemapTest,
                          ::testing::ValuesIn(EntryPointInterfaceCases()));
 
+// Remap function types
+
+struct FunctionTypeCase {
+  const char* initial_type_params = "";
+  const char* expected_type_params = "";
+};
+
+std::ostream& operator<<(std::ostream& os, const FunctionTypeCase& ftc) {
+  os << "(init " << ftc.initial_type_params << " -> expect "
+     << ftc.expected_type_params << ")";
+  return os;
+}
+
+struct SplitCombinedImageSamplerPassFunctionTypeTest
+    : public PassTest<::testing::TestWithParam<FunctionTypeCase>> {
+  virtual void SetUp() override {
+    SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
+    SetDisassembleOptions(SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+                          SPV_BINARY_TO_TEXT_OPTION_INDENT |
+                          SPV_BINARY_TO_TEXT_OPTION_NO_HEADER);
+  }
+};
+
+std::vector<FunctionTypeCase> FunctionTypeCases() {
+  return std::vector<FunctionTypeCase>{
+      {"", ""},
+      {" %image_ty", " %image_ty"},
+      {" %sampler_ty", " %sampler_ty"},
+      {" %sampled_image_ty", " %image_ty %sampler_ty"},
+      {" %uint %sampled_image_ty %float",
+       " %uint %image_ty %sampler_ty %float"},
+      {" %ptr_sampled_image_ty",
+       " %_ptr_UniformConstant_image_ty %_ptr_UniformConstant_sampler_ty"},
+      {" %uint %ptr_sampled_image_ty %float",
+       " %uint %_ptr_UniformConstant_image_ty %_ptr_UniformConstant_sampler_ty "
+       "%float"},
+      {" %uint %ptr_sampled_image_ty %ptr_sampled_image_ty %float",
+       " %uint %_ptr_UniformConstant_image_ty %_ptr_UniformConstant_sampler_ty "
+       "%_ptr_UniformConstant_image_ty %_ptr_UniformConstant_sampler_ty "
+       "%float"},
+  };
+};
+
+TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, Samples) {
+  const std::string kTest = Preamble() + +R"(
+       OpName %sampler_ty "sampler_ty"
+       OpName %image_ty "image_ty"
+       OpName %f_ty "f_ty"
+       OpName %sampled_image_ty "sampled_image_ty"
+       OpName %ptr_sampled_image_ty "sampled_image_ty"
+
+  )" + BasicTypes() + R"(
+
+ %sampler_ty = OpTypeSampler
+   %image_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
+ %sampled_image_ty = OpTypeSampledImage %image_ty
+ %ptr_sampled_image_ty = OpTypePointer UniformConstant %sampled_image_ty
+
+       %f_ty = OpTypeFunction %float)" +
+                            GetParam().initial_type_params + R"(
+       %bool = OpTypeBool
+
+  ; CHECK: %f_ty = OpTypeFunction %float)" +
+                            GetParam().expected_type_params + R"(
+  ; CHECK-NEXT: %bool = OpTypeBool
+
+         %main = OpFunction %void None %voidfn
+       %main_0 = OpLabel
+                 OpReturn
+                 OpFunctionEnd
+)";
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+INSTANTIATE_TEST_SUITE_P(FunctionTypeRemap,
+                         SplitCombinedImageSamplerPassFunctionTypeTest,
+                         ::testing::ValuesIn(FunctionTypeCases()));
+
 }  // namespace
 }  // namespace opt
 }  // namespace spvtools
