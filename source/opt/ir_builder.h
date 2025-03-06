@@ -514,6 +514,16 @@ class InstructionBuilder {
     return AddInstruction(std::move(new_inst));
   }
 
+  Instruction* AddCopyObject(uint32_t type_id, uint32_t value_id) {
+    std::vector<Operand> operands{{SPV_OPERAND_TYPE_ID, {value_id}}};
+
+    // TODO(1841): Handle id overflow.
+    std::unique_ptr<Instruction> new_inst(
+        new Instruction(GetContext(), spv::Op::OpCopyObject, type_id,
+                        GetContext()->TakeNextId(), operands));
+    return AddInstruction(std::move(new_inst));
+  }
+
   Instruction* AddVariable(uint32_t type_id, uint32_t storage_class) {
     std::vector<Operand> operands;
     operands.push_back({SPV_OPERAND_TYPE_STORAGE_CLASS, {storage_class}});
