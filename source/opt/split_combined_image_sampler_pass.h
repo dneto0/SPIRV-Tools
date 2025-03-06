@@ -71,6 +71,12 @@ class SplitCombinedImageSamplerPass : public Pass {
   spv_result_t RemapFunctions();
   spv_result_t RemapVars();
   spv_result_t RemapVar(Instruction* mem_obj);
+  // Remaps uses of the combined object with uses of the decomposed image and
+  // sampler parts. The combined object can be sampled image value, a pointer to
+  // one, an array of one, or a pointer to an array of one. The image and
+  // sampler parts have corresponding shapes.
+  spv_result_t RemapUses(Instruction* combined, Instruction* image_part,
+                         Instruction* sampler_part);
   // Removes instructions queued up for removal during earlier processing
   // stages.
   spv_result_t RemoveDeadInstructions();
