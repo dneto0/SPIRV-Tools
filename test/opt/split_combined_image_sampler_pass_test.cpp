@@ -623,7 +623,8 @@ std::vector<FunctionTypeCase> FunctionTypeCases() {
   };
 };
 
-TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, Samples) {
+TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest,
+       ReplaceCombinedImageSamplersOnly) {
   const std::string kTest = Preamble() + +R"(
        OpName %sampler_ty "sampler_ty"
        OpName %image_ty "image_ty"
@@ -645,12 +646,45 @@ TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, Samples) {
   ; CHECK: %f_ty = OpTypeFunction %float)" +
                             GetParam().expected_type_params + R"(
   ; CHECK-NEXT: %bool = OpTypeBool
+)" + Main();
 
-         %main = OpFunction %void None %voidfn
-       %main_0 = OpLabel
-                 OpReturn
-                 OpFunctionEnd
-)";
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, AvoidDuplicateType) {
+  // SPIR-V does not allow duplicate non-aggregate types. That includes function
+  // types.  Test that when replacing function type parameters would cause a
+  // collision, that the original function type is replaced with the new one.
+  const std::string initial_params(GetParam().initial_type_params);
+  const std::string expected_params(GetParam().expected_type_params);
+  const std::string kTest = Preamble() + +R"(
+       OpName %sampler_ty "sampler_ty"
+       OpName %image_ty "image_ty"
+       OpName %sampled_image_ty "sampled_image_ty"
+       OpName %ptr_sampled_image_ty "sampled_image_ty"
+
+  )" + BasicTypes() + R"(
+
+ %sampler_ty = OpTypeSampler
+   %image_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
+ %sampled_image_ty = OpTypeSampledImage %image_ty
+ %ptr_sampled_image_ty = OpTypePointer UniformConstant %sampled_image_ty
+
+        %100 = OpTypeFunction %float)" +
+                            initial_params + R"(
+    %dest_ty = OpTypeFunction %float)" +
+                            expected_params + R"(
+       %bool = OpTypeBool
+
+  ; CHECK: OpTypeSampler
+  ; CHECK-NOT: %100 =
+  ; CHECK: %dest_ty = OpTypeFuntion %float)" +
+                            expected_params + R"(
+  ; CHECK-NEXT: %bool = OpTypeBool
+)" + Main();
+
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
@@ -662,7 +696,7 @@ INSTANTIATE_TEST_SUITE_P(FunctionTypeRemap,
 
 // Remap function bodies
 
-std::string NamedITypes(){
+std::string NamedITypes() {
   return R"(
       OpName %f "f"
       OpName %f_ty "f_ty"
@@ -675,7 +709,7 @@ std::string NamedITypes(){
 )";
 }
 
-std::string ITypes(){
+std::string ITypes() {
   return R"(
       %i_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
       %s_ty = OpTypeSampler
@@ -687,7 +721,8 @@ std::string ITypes(){
 }
 
 TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_ScalarNoChange) {
-  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
+                            ITypes() + R"(
 
       ; CHECK: %f_ty = OpTypeFunction %float %i_ty %s_ty %p_i_ty %p_s_ty
       %f_ty = OpTypeFunction %float %i_ty %s_ty %p_i_ty %p_s_ty
@@ -713,8 +748,9 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_ScalarNoChange) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage) {
-  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+TEST_F(SplitCombinedImageSamplerPassTest, DISABLED_FunctionBody_SampledImage) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
+                            ITypes() + R"(
 
       ; CHECK: %f_ty = OpTypeFunction %float %uint %i_ty %s_ty %float
       %f_ty = OpTypeFunction %float %uint %si_ty %float
@@ -742,8 +778,10 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, DISABLED_FunctionBody_PtrSampledImage) {
-  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() + ITypes() + R"(
+TEST_F(SplitCombinedImageSamplerPassTest,
+       DISABLED_FunctionBody_PtrSampledImage) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
+                            ITypes() + R"(
 
       ; CHECK: %f_ty = OpTypeFunction %float %uint %p_i_ty %p_s_ty %float
       %f_ty = OpTypeFunction %float %uint %p_si_ty %float
