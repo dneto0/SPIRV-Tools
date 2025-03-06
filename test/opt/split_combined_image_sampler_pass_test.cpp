@@ -756,7 +756,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_ScalarNoChange) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, DISABLED_FunctionBody_SampledImage) {
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage) {
   const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
                             ITypes() + R"(
 
@@ -786,8 +786,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, DISABLED_FunctionBody_SampledImage) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest,
-       DISABLED_FunctionBody_PtrSampledImage) {
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_PtrSampledImage) {
   const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
                             ITypes() + R"(
 
