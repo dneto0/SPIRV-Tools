@@ -298,6 +298,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
         break;
       default:
         // TODO(dneto): OpFunctionCall
+        // TODO(dneto): OpAccessChain, for arrays
         return Fail() << "unhandled user: " << *use.user;
     }
   }
