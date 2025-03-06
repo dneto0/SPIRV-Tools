@@ -626,9 +626,9 @@ std::vector<FunctionTypeCase> FunctionTypeCases() {
 TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest,
        ReplaceCombinedImageSamplersOnly) {
   const std::string kTest = Preamble() + +R"(
+       OpName %f_ty "f_ty"
        OpName %sampler_ty "sampler_ty"
        OpName %image_ty "image_ty"
-       OpName %f_ty "f_ty"
        OpName %sampled_image_ty "sampled_image_ty"
        OpName %ptr_sampled_image_ty "sampled_image_ty"
 
@@ -641,11 +641,9 @@ TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest,
 
        %f_ty = OpTypeFunction %float)" +
                             GetParam().initial_type_params + R"(
-       %bool = OpTypeBool
 
   ; CHECK: %f_ty = OpTypeFunction %float)" +
                             GetParam().expected_type_params + R"(
-  ; CHECK-NEXT: %bool = OpTypeBool
 )" + Main();
 
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
@@ -663,7 +661,10 @@ TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, AvoidDuplicateType) {
        OpName %sampler_ty "sampler_ty"
        OpName %image_ty "image_ty"
        OpName %sampled_image_ty "sampled_image_ty"
+       OpName %_ptr_UniformConstant_sampler_ty "_ptr_UniformConstant_sampler_ty"
+       OpName %_ptr_UniformConstant_image_ty "_ptr_UniformConstant_image_ty"
        OpName %ptr_sampled_image_ty "sampled_image_ty"
+       OpName %dest_ty "dest_ty"
 
   )" + BasicTypes() + R"(
 
@@ -671,23 +672,30 @@ TEST_P(SplitCombinedImageSamplerPassFunctionTypeTest, AvoidDuplicateType) {
    %image_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
  %sampled_image_ty = OpTypeSampledImage %image_ty
  %ptr_sampled_image_ty = OpTypePointer UniformConstant %sampled_image_ty
+ %_ptr_UniformConstant_image_ty = OpTypePointer UniformConstant %image_ty
+ %_ptr_UniformConstant_sampler_ty = OpTypePointer UniformConstant %sampler_ty
 
         %100 = OpTypeFunction %float)" +
                             initial_params + R"(
     %dest_ty = OpTypeFunction %float)" +
                             expected_params + R"(
-       %bool = OpTypeBool
 
   ; CHECK: OpTypeSampler
   ; CHECK-NOT: %100 =
-  ; CHECK: %dest_ty = OpTypeFuntion %float)" +
+  ; CHECK: %dest_ty = OpTypeFunction %float)" +
                             expected_params + R"(
-  ; CHECK-NEXT: %bool = OpTypeBool
+  ; CHECK-NOT: %100 =
+  ; CHECK: %main = OpFunction
 )" + Main();
-
-  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
-      kTest, /* do_validation= */ true);
-  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+  // The original source is invalid if initial and expected params are the same,
+  // because the type is already duplicated.
+  // Only test when they are different.
+  if (initial_params != expected_params) {
+    auto [disasm, status] =
+        SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+            kTest, /* do_validation= */ true);
+    EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(FunctionTypeRemap,

@@ -57,6 +57,8 @@ class SplitCombinedImageSamplerPass : public Pass {
   // consumer.
   spvtools::DiagnosticStream Fail();
 
+  // Find variables that contain combined texture-samplers, or arrays of them.
+  // Also populate known_globals_.
   void FindCombinedTextureSamplers();
 
   // Returns the sampler type. If it does not yet exist, then it is created
@@ -99,6 +101,10 @@ class SplitCombinedImageSamplerPass : public Pass {
   // The known types and module-scope values.
   // We use this to know when a new such value was created.
   std::unordered_set<uint32_t> known_globals_;
+  bool IsKnownGlobal(uint32_t id) const {
+    return known_globals_.find(id) != known_globals_.end();
+  }
+  void RegisterGlobal(uint32_t id) { known_globals_.insert(id); }
 
   // Combined types.  The known combined sampled-image type,
   // and recursively pointers or arrays of them.

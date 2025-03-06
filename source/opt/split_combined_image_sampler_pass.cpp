@@ -14,6 +14,7 @@
 
 #include "source/opt/split_combined_image_sampler_pass.h"
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <memory>
@@ -64,7 +65,7 @@ spvtools::DiagnosticStream SplitCombinedImageSamplerPass::Fail() {
 
 void SplitCombinedImageSamplerPass::FindCombinedTextureSamplers() {
   for (auto& inst : context()->types_values()) {
-    known_globals_.insert(inst.result_id());
+    RegisterGlobal(inst.result_id());
     switch (inst.opcode()) {
       case spv::Op::OpTypeSampler:
         // Note: The "if" should be redundant because valid modules can't have
@@ -124,7 +125,7 @@ Instruction* SplitCombinedImageSamplerPass::GetSamplerType() {
     sampler_type_ = def_use_mgr_->GetDef(sampler_type_id);
     assert(first_sampled_image_type_);
     sampler_type_->InsertBefore(first_sampled_image_type_);
-    known_globals_.insert(sampler_type_->result_id());
+    RegisterGlobal(sampler_type_->result_id());
     modified_ = true;
   }
   return sampler_type_;
@@ -167,12 +168,12 @@ std::pair<Instruction*, Instruction*> SplitCombinedImageSamplerPass::SplitType(
             uint32_t ptr_id = type_mgr_->FindPointerToType(
                 pointee->result_id(), spv::StorageClass::UniformConstant);
             auto* ptr = def_use_mgr_->GetDef(ptr_id);
-            if (known_globals_.find(ptr_id) == known_globals_.end()) {
+            if (!IsKnownGlobal(ptr_id)) {
               // The pointer type was created at the end. Put it right after the
               // pointee.
               ptr->InsertBefore(pointee);
               pointee->InsertBefore(ptr);
-              known_globals_.insert(ptr_id);
+              RegisterGlobal(ptr_id);
               def_use_mgr_->AnalyzeInstUse(pointee);
               modified_ = true;
             }
@@ -311,28 +312,45 @@ spv_result_t SplitCombinedImageSamplerPass::RemapVar(Instruction* mem_obj) {
 spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
   std::unordered_set<Instruction*> reanalyze_set;
 
-  // Rewrite parameters in the function types.
+  // Remap function types. A combined type can appear as a parameter, but not as
+  // the return type.
   for (auto& inst : context()->types_values()) {
     if (inst.opcode() == spv::Op::OpTypeFunction) {
-      // 0th operand is the result type, so start from 1.
-      for (uint32_t i = 1; i < inst.NumInOperands(); i++) {
-        auto param_type_id = inst.GetSingleWordInOperand(i);
-        if (combined_types_.find(param_type_id) != combined_types_.end()) {
-          // Split it.
-          auto* param_type = def_use_mgr_->GetDef(param_type_id);
+      analysis::Function* f_ty =
+          type_mgr_->GetType(inst.result_id())->AsFunction();
+      std::vector<const analysis::Type*> new_params;
+      for (const auto* param_ty : f_ty->param_types()) {
+        const auto param_ty_id = type_mgr_->GetId(param_ty);
+        if (combined_types_.find(param_ty_id) != combined_types_.end()) {
+          auto* param_type = def_use_mgr_->GetDef(param_ty_id);
           auto [image_type, sampler_type] = SplitType(*param_type);
           assert(image_type);
           assert(sampler_type);
-          // Add one because the set and insert methods count both in and out
-          // operands.
-          inst.SetOperand(i + 1, {sampler_type->result_id()});
-          inst.InsertOperand(i + 1, {spv_operand_type_t::SPV_OPERAND_TYPE_ID,
-                                     {image_type->result_id()}});
-          i++;
-          reanalyze_set.insert(image_type);
-          reanalyze_set.insert(sampler_type);
-          reanalyze_set.insert(&inst);
+          // The image and sampler types must already exist, so there is no
+          // need to move them to the right spot.
+          new_params.push_back(type_mgr_->GetType(image_type->result_id()));
+          new_params.push_back(type_mgr_->GetType(sampler_type->result_id()));
+        } else {
+          new_params.push_back(param_ty);
         }
+      }
+      if (new_params.size() != f_ty->param_types().size()) {
+        // Replace this type.
+        analysis::Function new_f_ty(f_ty->return_type(), new_params);
+        const uint32_t new_f_ty_id = type_mgr_->GetTypeInstruction(&new_f_ty);
+        def_use_mgr_->ForEachUse(&inst,
+                                 [&](Instruction* user, uint32_t use_index) {
+                                   user->SetOperand(use_index, {new_f_ty_id});
+                                   reanalyze_set.insert(user);
+                                 });
+        dead_.push_back(&inst);
+
+        reanalyze_set.insert(def_use_mgr_->GetDef(new_f_ty_id));
+        // Reanalyze the non-combined parameter types, and the return type.
+        auto* new_f_ty_inst = def_use_mgr_->GetDef(new_f_ty_id);
+        new_f_ty_inst->ForEachId([&](const uint32_t* param_id_ptr) {
+          reanalyze_set.insert(def_use_mgr_->GetDef(*param_id_ptr));
+        });
       }
     }
   }
@@ -345,8 +363,8 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
     };
     std::vector<CombinedParam> to_replace;
     fn.ForEachParam([&](Instruction* param) {
-      auto param_type_id = param->type_id();
-      if (combined_types_.find(param_type_id) != combined_types_.end()) {
+      auto param_ty_id = param->type_id();
+      if (combined_types_.find(param_ty_id) != combined_types_.end()) {
         to_replace.push_back({param, nullptr, nullptr});
       }
     });
