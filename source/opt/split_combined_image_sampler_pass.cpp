@@ -357,16 +357,11 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
   }
   // Rewite OpFunctionParameter in function definitions.
   for (Function& fn : *context()->module()) {
-    struct CombinedParam {
-      Instruction* param;
-      Instruction* image_param;
-      Instruction* sampler_param;
-    };
-    std::vector<CombinedParam> to_replace;
+    std::vector<Instruction*> to_replace;
     fn.ForEachParam([&](Instruction* param) {
       auto param_ty_id = param->type_id();
       if (combined_types_.find(param_ty_id) != combined_types_.end()) {
-        to_replace.push_back({param, nullptr, nullptr});
+        to_replace.push_back(param);
       }
     });
     if (to_replace.empty()) {
@@ -377,7 +372,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
         [&](std::unique_ptr<Instruction>&& from_param,
             std::back_insert_iterator<Function::ParamList>& appender) {
           auto param = std::move(from_param);
-          if (param.get() == next_to_replace->param) {
+          if (param.get() == *next_to_replace) {
             auto* param_type = def_use_mgr_->GetDef(param->type_id());
             auto [image_type, sampler_type] = SplitType(*param_type);
             auto image_param = MakeUnique<Instruction>(
@@ -388,8 +383,6 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
                 context(), spv::Op::OpFunctionParameter,
                 sampler_type->result_id(), context()->TakeNextId(),
                 Instruction::OperandList{});
-            next_to_replace->image_param = image_param.get();
-            next_to_replace->sampler_param = sampler_param.get();
             reanalyze_set.insert(image_param.get());
             reanalyze_set.insert(sampler_param.get());
             appender = std::move(image_param);
