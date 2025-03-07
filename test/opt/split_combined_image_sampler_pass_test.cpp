@@ -987,41 +987,39 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_NoImageOrSampler_NoChange
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_NoImageOrSampler) {
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_Image_NoChange) {
   const std::string kTest = Preamble() + NamedITypes() + NamedCaller() + BasicTypes() +
                             ITypes() + R"(
 
-      ; CHECK: %f_ty = OpTypeFunction %void %uint %float
-      %f_ty = OpTypeFunction %void %uint %float
-      %caller_ty = OpTypeFunction %float  ; make it return non-void otherwise it's just like main
+      ; CHECK: %f_ty = OpTypeFunction %void %i_ty
+      %f_ty = OpTypeFunction %void %i_ty
+      %caller_ty = OpTypeFunction %float %i_ty
 
       ; The called function does not change
       ; CHECK: %f = OpFunction %void None %f_ty
-      ; CHECK-NEXT: = OpFunctionParameter %uint
-      ; CHECK-NEXT: = OpFunctionParameter %float
+      ; CHECK-NEXT: = OpFunctionParameter %i_ty
       ; CHECK-NEXT: = OpLabel
       ; CHECK-NEXT: OpReturn
       ; CHECK-NEXT: OpFunctionEnd
 
       %f = OpFunction %void None %f_ty
-      %100 = OpFunctionParameter %uint
-      %101 = OpFunctionParameter %float
+      %100 = OpFunctionParameter %i_ty
       %110 = OpLabel
       OpReturn
       OpFunctionEnd
 
       ; The caller does not change
       ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %caller_arg = OpFunctionParameter %i_ty
       ; CHECK-NEXT: %caller_entry = OpLabel
-      ; CHECK-NEXT: %caller_arg = OpCopyObject %uint %uint_0
-      ; CHECK-NEXT: OpFunctionCall %void %f %caller_arg %float_0
+      ; CHECK-NEXT: OpFunctionCall %void %f %caller_arg
       ; CHECK-NEXT: OpReturnValue %float_0
       ; CHECK-NEXT: OpFunctionEnd
 
       %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %i_ty
 %caller_entry = OpLabel
-  %caller_arg = OpCopyObject %uint %uint_0
- %caller_call = OpFunctionCall %void %f %caller_arg %float_0
+ %caller_call = OpFunctionCall %void %f %caller_arg
                 OpReturnValue %float_0
                 OpFunctionEnd
 
@@ -1032,6 +1030,136 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_NoImageOrSampler) {
   EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
 }
 
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_Sampler_NoChange) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCaller() + BasicTypes() +
+                            ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %s_ty
+      %f_ty = OpTypeFunction %void %s_ty
+      %caller_ty = OpTypeFunction %float %s_ty
+
+      ; The called function does not change
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %s_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; The caller does not change
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %caller_arg = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: OpFunctionCall %void %f %caller_arg
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %s_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_PtrImage_NoChange) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCaller() + BasicTypes() +
+                            ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %p_i_ty
+      %f_ty = OpTypeFunction %void %p_i_ty
+      %caller_ty = OpTypeFunction %float %p_i_ty
+
+      ; The called function does not change
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: = OpFunctionParameter %p_i_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %p_i_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; The caller does not change
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %caller_arg = OpFunctionParameter %p_i_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: OpFunctionCall %void %f %caller_arg
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %p_i_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_PtrSampler_NoChange) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCaller() + BasicTypes() +
+                            ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %p_s_ty
+      %f_ty = OpTypeFunction %void %p_s_ty
+      %caller_ty = OpTypeFunction %float %p_s_ty
+
+      ; The called function does not change
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: = OpFunctionParameter %p_s_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %p_s_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; The caller does not change
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %caller_arg = OpFunctionParameter %p_s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: OpFunctionCall %void %f %caller_arg
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %p_s_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
+}
+
+
 #if 0
 std::vector<FunctionCallCase> FunctionCallCases() {
   return std::vector<FunctionCallCase>{
@@ -1039,9 +1167,9 @@ std::vector<FunctionCallCase> FunctionCallCases() {
       {" %i_ty", " %i_ty"},
       {" %s_ty", " %s_ty"},
       {" %si_ty", " %i_ty %s_ty"},
-      {" %uint %si_ty %float", " %uint %i_ty %s_ty %float"},
       {" %p_i_ty", " %p_i_ty"},
       {" %p_s_ty", " %p_s_ty"},
+      {" %uint %si_ty %float", " %uint %i_ty %s_ty %float"},
       {" %p_si_ty", " %p_i_ty %p_s_ty"},
       {" %uint %p_si_ty %float", " %uint %p_i_ty %p_s_ty %float"},
       {" %uint %p_si_ty %p_si_ty %float",
