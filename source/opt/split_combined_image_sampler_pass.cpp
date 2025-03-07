@@ -47,8 +47,9 @@ Pass::Status SplitCombinedImageSamplerPass::Process() {
     return Ok();
   }
 
-  CHECK(RemapVars());
+  // Remap function types first
   CHECK(RemapFunctions());
+  CHECK(RemapVars());
   CHECK(RemoveDeadInstructions());
 
   def_use_mgr_ = nullptr;
@@ -232,14 +233,15 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
   // sampled image from them, all in the same basic block.
 
   struct Use {
+    uint32_t used_id;  // The ID that is being used
     Instruction* user;
     uint32_t index;
   };
   std::vector<Use> uses;
-  def_use_mgr_->ForEachUse(combined,
-                           [&](Instruction* user, uint32_t use_index) {
-                             uses.push_back({user, use_index});
-                           });
+  def_use_mgr_->ForEachUse(
+      combined, [&](Instruction* user, uint32_t use_index) {
+        uses.push_back({combined->result_id(), user, use_index});
+      });
 
   // Use index-based iteration because we can add to the list as we go along,
   // and reallocation would invalidate ordinary iterators.
@@ -249,10 +251,13 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
       case spv::Op::OpCopyObject: {
         MarkAsDead(use.user);
         // Append the uses of this OpCopyObject to the work list.
-        def_use_mgr_->ForEachUse(use.user,
-                                 [&](Instruction* user, uint32_t use_index) {
-                                   uses.push_back({user, use_index});
-                                 });
+        // Record the ID of the OpCopyObject as being used.  It might be used
+        // as the operand to an OpFunctionCall, where this will matter.
+        const uint32_t copy_object_id = use.user->result_id();
+        def_use_mgr_->ForEachUse(
+            use.user, [&](Instruction* user, uint32_t use_index) {
+              uses.push_back({copy_object_id, user, use_index});
+            });
         break;
       }
       case spv::Op::OpLoad: {
@@ -323,6 +328,26 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
         // TODO(dneto): synthesize names for the remapped vars.
         MarkAsDead(use.user);
         break;
+      case spv::Op::OpFunctionCall: {
+        // Replace each combined arg with two args: the image part, then the
+        // sampler part.
+        // The combined value could have been used twice in the argument list.
+        // Moving things around now will invalidate the 'use' list above.
+        // So don't trust the use index value.
+        auto& call = *use.user;
+        // The insert API only takes absolute arg IDs, not "in" arg IDs.
+        const auto first_arg_operand_index = 3;  // Skip the callee ID
+        for (uint32_t i = first_arg_operand_index; i < call.NumOperands();
+             ++i) {
+          if (use.used_id == call.GetSingleWordOperand(i)) {
+            call.SetOperand(i, {sampler_part->result_id()});
+            call.InsertOperand(
+                i, {SPV_OPERAND_TYPE_ID, {image_part->result_id()}});
+            ++i;
+          }
+        }
+        break;
+      }
       default: {
         // TODO(dneto): OpFunctionCall
         // TODO(dneto): OpAccessChain, for arrays

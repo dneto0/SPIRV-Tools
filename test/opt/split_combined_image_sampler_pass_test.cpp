@@ -410,10 +410,9 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest,
      ; CHECK-NEXT: OpCopyObject %11 %[[si]]
      ; CHECK-NEXT: OpReturn
 )";
-  std::cout << kTest << std::endl;
+
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
       kTest, /* do_validation= */ true);
-  std::cout << ";=disasm\n" << disasm << std::endl;
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
@@ -1160,17 +1159,18 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_PtrSampler_NoChange) {
 }
 
 TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_SampledImage_Split) {
-  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() + NamedCaller() + BasicTypes() +
-                            ITypes() + CombinedTypes() + R"(
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() +
+                            NamedCaller() + BasicTypes() + ITypes() +
+                            CombinedTypes() + R"(
 
       ; CHECK: %f_ty = OpTypeFunction %void %i_ty %s_ty
       %f_ty = OpTypeFunction %void %si_ty
       %caller_ty = OpTypeFunction %float %si_ty
 
       ; Call function arg is split. We've checked these details in other tests.
-      ; CHECK: %f = OpFunction %void None %i_ty %s_ty
+      ; CHECK: %f = OpFunction %void None %f_ty
       ; CHECK-NEXT: %[[callee_i:\w+]] = OpFunctionParameter %i_ty
-      ; CHECK-NEXT: %[[callee_s:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s:\w+]] = OpFunctionParameter %s_ty
       ; CHECK-NEXT: = OpLabel
       ; CHECK-NEXT: OpReturn
       ; CHECK-NEXT: OpFunctionEnd
@@ -1185,7 +1185,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_SampledImage_Split) {
       ; CHECK-NEXT: %[[caller_i:\w+]] = OpFunctionParameter %i_ty
       ; CHECK-NEXT: %[[caller_s:\w+]] = OpFunctionParameter %s_ty
       ; CHECK-NEXT: %caller_entry = OpLabel
-      ; CHECK-NEXT: OpFunctionCall %void %f %[[caller_i]] %[[caller_s]]
+      ; CHECK-NEXT: %caller_call = OpFunctionCall %void %f %[[caller_i]] %[[caller_s]]
       ; CHECK-NEXT: OpReturnValue %float_0
       ; CHECK-NEXT: OpFunctionEnd
 
@@ -1203,6 +1203,214 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_SampledImage_Split) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
+TEST_F(SplitCombinedImageSamplerPassTest,
+       FunctionCall_SampledImageDuplicatedArg_Split) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() +
+                            NamedCaller() + BasicTypes() + ITypes() +
+                            CombinedTypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %i_ty %s_ty %i_ty %s_ty
+      %f_ty = OpTypeFunction %void %si_ty %si_ty
+      %caller_ty = OpTypeFunction %float %si_ty
+
+      ; Call function arg is split. We've checked these details in other tests.
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: %[[callee_i_0:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_0:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[callee_i_1:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_1:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %si_ty
+      %101 = OpFunctionParameter %si_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %[[caller_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: %caller_call = OpFunctionCall %void %f %[[caller_i]] %[[caller_s]] %[[caller_i]] %[[caller_s]]
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %si_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg %caller_arg
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest,
+       FunctionCall_SampledImageTwoDistinct_Split) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() +
+                            NamedCaller() + BasicTypes() + ITypes() +
+                            CombinedTypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %i_ty %s_ty %i_ty %s_ty
+      %f_ty = OpTypeFunction %void %si_ty %si_ty
+      %caller_ty = OpTypeFunction %float %si_ty %si_ty
+
+      ; Call function arg is split. We've checked these details in other tests.
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: %[[callee_i_0:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_0:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[callee_i_1:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_1:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %si_ty
+      %101 = OpFunctionParameter %si_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %[[caller_i_0:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s_0:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[caller_i_1:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s_1:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: %caller_call = OpFunctionCall %void %f %[[caller_i_0]] %[[caller_s_0]] %[[caller_i_1]] %[[caller_s_1]]
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %si_ty
+         %201 = OpFunctionParameter %si_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg %201
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest,
+       FunctionCall_SampledImageAndCopy_Split) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() +
+                            NamedCaller() + BasicTypes() + ITypes() +
+                            CombinedTypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %i_ty %s_ty %i_ty %s_ty
+      %f_ty = OpTypeFunction %void %si_ty %si_ty
+      ; CHECK: %caller_ty = OpTypeFunction %float %i_ty %s_ty
+      %caller_ty = OpTypeFunction %float %si_ty
+
+      ; Call function arg is split. We've checked these details in other tests.
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: %[[callee_i_0:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_0:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[callee_i_1:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s_1:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %si_ty
+      %101 = OpFunctionParameter %si_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %[[caller_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: %caller_call = OpFunctionCall %void %f %[[caller_i]] %[[caller_s]] %[[caller_i]] %[[caller_s]]
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %si_ty
+%caller_entry = OpLabel
+        %copy = OpCopyObject %si_ty %caller_arg
+ %caller_call = OpFunctionCall %void %f %caller_arg %copy
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest,
+       FunctionCall_SampledImageSurrounded_Split) {
+  // Test indexing by surrounding the sampled image parameter with other
+  // arguments that should not be touched.
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() +
+                            NamedCaller() + BasicTypes() + ITypes() +
+                            CombinedTypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %float %i_ty %s_ty %uint
+      %f_ty = OpTypeFunction %void %float %si_ty %uint
+      ; CHECK: %caller_ty = OpTypeFunction %float %uint %i_ty %s_ty %float
+      %caller_ty = OpTypeFunction %float %uint %si_ty %float
+
+      ; Call function arg is split. We've checked these details in other tests.
+      ; CHECK: %f = OpFunction %void None %f_ty
+      ; CHECK-NEXT: %[[callee_f:\w+]] = OpFunctionParameter %float
+      ; CHECK-NEXT: %[[callee_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[callee_u:\w+]] = OpFunctionParameter %uint
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+       %99 = OpFunctionParameter %float
+      %100 = OpFunctionParameter %si_ty
+      %101 = OpFunctionParameter %uint
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %[[u_param:\w+]] = OpFunctionParameter %uint
+      ; CHECK-NEXT: %[[caller_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %[[f_param:\w+]] = OpFunctionParameter %float
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: %caller_call = OpFunctionCall %void %f %[[f_param]] %[[caller_i]] %[[caller_s]] %[[u_param]]
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+         %200 = OpFunctionParameter %uint
+  %caller_arg = OpFunctionParameter %si_ty
+         %201 = OpFunctionParameter %float
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %201 %caller_arg %200
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
 
 // TODO(dneto): test additional args around the split
 
