@@ -158,6 +158,7 @@ class SplitCombinedImageSamplerPass : public Pass {
 
   // The instructions to be removed.
   std::vector<Instruction*> dead_;
+  void MarkAsDead(Instruction* inst);
   size_t num_to_delete_ = 0;  // TODO(dneto) remove this once arrays are handled
 };
 }  // namespace opt

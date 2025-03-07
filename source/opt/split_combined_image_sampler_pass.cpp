@@ -184,7 +184,7 @@ std::pair<Instruction*, Instruction*> SplitCombinedImageSamplerPass::SplitType(
           type_remap_[combined_kind_type.result_id()] = {
               &combined_kind_type, ptr_image, ptr_sampler};
           num_to_delete_++;
-          // dead_.push_back(&combined_kind_type); // Schedule for deletion.
+          // MarkAsDead(&combined_kind_type); // Schedule for deletion.
           return {ptr_image, ptr_sampler};
         }
       }
@@ -241,8 +241,20 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
                              uses.push_back({user, use_index});
                            });
 
-  for (auto& use : uses) {
+  // Use index-based iteration because we can add to the list as we go along,
+  // and reallocation would invalidate ordinary iterators.
+  for (size_t i = 0; i < uses.size(); ++i) {
+    auto& use = uses[i];
     switch (use.user->opcode()) {
+      case spv::Op::OpCopyObject: {
+        MarkAsDead(use.user);
+        // Append the uses of this OpCopyObject to the work list.
+        def_use_mgr_->ForEachUse(use.user,
+                                 [&](Instruction* user, uint32_t use_index) {
+                                   uses.push_back({user, use_index});
+                                 });
+        break;
+      }
       case spv::Op::OpLoad: {
         if (use.index != 2)
           return Fail() << "variable used as non-pointer index " << use.index
@@ -269,7 +281,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
         def_use_mgr_->AnalyzeInstUse(image);
         def_use_mgr_->AnalyzeInstUse(sampler);
         def_use_mgr_->AnalyzeInstUse(sampled_image);
-        dead_.push_back(load);
+        MarkAsDead(load);
         break;
       }
       case spv::Op::OpDecorate: {
@@ -285,7 +297,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
         builder.AddDecoration(image_part->result_id(), deco, literals);
         builder.AddDecoration(sampler_part->result_id(), deco, literals);
         // TODO(dneto): RelaxedPrecision?
-        dead_.push_back(use.user);
+        MarkAsDead(use.user);
         break;
       }
       case spv::Op::OpEntryPoint: {
@@ -309,19 +321,34 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
       }
       case spv::Op::OpName:
         // TODO(dneto): synthesize names for the remapped vars.
-        dead_.push_back(use.user);
+        MarkAsDead(use.user);
         break;
-      default:
+      default: {
         // TODO(dneto): OpFunctionCall
         // TODO(dneto): OpAccessChain, for arrays
+        //
+        auto* combined_ty = def_use_mgr_->GetDef(combined->type_id());
+        if (combined_ty->opcode() == spv::Op::OpTypeSampledImage) {
+          // This operates on the sampled image. We're removing the sampled
+          // image: recreate it.
+          // Example: OpImage, OpImageSampleExplicitLod, etc.
+          builder.SetInsertPoint(use.user);
+          auto* sampled_image = builder.AddSampledImage(
+              combined_ty->result_id(), image_part->result_id(),
+              sampler_part->result_id());
+          use.user->SetOperand(use.index, {sampled_image->result_id()});
+          def_use_mgr_->AnalyzeInstUse(use.user);
+          break;
+        }
         return Fail() << "unhandled user: " << *use.user;
+      }
     }
   }
   // We've added new uses of the new variables.
   def_use_mgr_->AnalyzeInstUse(image_part);
   def_use_mgr_->AnalyzeInstUse(sampler_part);
 
-  dead_.push_back(combined);
+  MarkAsDead(combined);
   return SPV_SUCCESS;
 }
 
@@ -359,7 +386,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
                                      user->SetOperand(use_index, {new_f_ty_id});
                                      reanalyze_set.insert(user);
                                    });
-          dead_.push_back(&inst);
+          MarkAsDead(&inst);
 
           reanalyze_set.insert(def_use_mgr_->GetDef(new_f_ty_id));
           // Reanalyze the non-combined parameter types, and the return type.
@@ -400,7 +427,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
           auto param = std::move(from_param);
           if (param.get() == *next_to_replace) {
             auto* param_inst = param.release();
-            auto* param_type = def_use_mgr_->GetDef(param->type_id());
+            auto* param_type = def_use_mgr_->GetDef(param_inst->type_id());
             auto [image_type, sampler_type] = SplitType(*param_type);
             auto image_param = MakeUnique<Instruction>(
                 context(), spv::Op::OpFunctionParameter,
@@ -410,6 +437,8 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
                 context(), spv::Op::OpFunctionParameter,
                 sampler_type->result_id(), context()->TakeNextId(),
                 Instruction::OperandList{});
+            def_use_mgr_->AnalyzeInstDef(image_param.get());
+            def_use_mgr_->AnalyzeInstDef(sampler_param.get());
             replacements.push_back(
                 {param_inst, image_param.get(), sampler_param.get()});
             appender = std::move(image_param);
@@ -429,14 +458,19 @@ spv_result_t SplitCombinedImageSamplerPass::RemapFunctions() {
   return SPV_SUCCESS;
 }
 
+void SplitCombinedImageSamplerPass::MarkAsDead(Instruction* inst) {
+  assert(inst);
+  dead_.push_back(inst);
+}
+
 spv_result_t SplitCombinedImageSamplerPass::RemoveDeadInstructions() {
   auto result = SPV_SUCCESS;
   for (auto dead_type_id : combined_types_to_remove_) {
     auto* ty = def_use_mgr_->GetDef(dead_type_id);
-    dead_.push_back(ty);
+    MarkAsDead(ty);
     def_use_mgr_->ForEachUse(ty, [&](Instruction* user, uint32_t use_index) {
       if (user->opcode() == spv::Op::OpName) {
-        dead_.push_back(user);
+        MarkAsDead(user);
       }
     });
     CHECK_STATUS(result);
@@ -445,8 +479,10 @@ spv_result_t SplitCombinedImageSamplerPass::RemoveDeadInstructions() {
   for (Instruction* inst : dead_) {
     def_use_mgr_->ClearInst(inst);
   }
-  for (Instruction* inst : dead_) {
-    inst->RemoveFromList();
+  for (auto* inst : dead_) {
+    if (inst->IsInAList()) {
+      inst->RemoveFromList();
+    }
     delete inst;
   }
   ordered_objs_.clear();

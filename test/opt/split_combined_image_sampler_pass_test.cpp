@@ -356,6 +356,66 @@ TEST_P(SplitCombinedImageSamplerPassTypeCaseTest, Combined_RemapLoad) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
+TEST_P(SplitCombinedImageSamplerPassTypeCaseTest,
+       Combined_DeletesCopyObjectOfPtr) {
+  // OpCopyObject is deleted, and its uses updated.
+  const std::string kTest = Preamble() +
+                            R"(
+               OpDecorate %100 DescriptorSet 0
+               OpDecorate %100 Binding 0
+
+     ; CHECK: OpName
+     ; CHECK-NOT: OpDecorate %100
+     ; CHECK: OpDecorate %[[image_var:\d+]] DescriptorSet 0
+     ; CHECK: OpDecorate %[[sampler_var:\d+]] DescriptorSet 0
+     ; CHECK: OpDecorate %[[image_var]] Binding 0
+     ; CHECK: OpDecorate %[[sampler_var]] Binding 0
+
+     ; CHECK: %10 = OpTypeImage %
+     ; CHECK: %[[image_ptr_ty:\w+]] = OpTypePointer UniformConstant %10
+     ; CHECK: %[[sampler_ty:\d+]] = OpTypeSampler
+     ; CHECK: %[[sampler_ptr_ty:\w+]] = OpTypePointer UniformConstant %[[sampler_ty]]
+
+     ; The combined image variable is replaced by an image variable and a sampler variable.
+
+     ; CHECK-NOT: %100 = OpVariable
+     ; CHECK-DAG: %[[sampler_var]] = OpVariable %[[sampler_ptr_ty]] UniformConstant
+     ; CHECK-DAG: %[[image_var]] = OpVariable %[[image_ptr_ty]] UniformConstant
+     ; CHECK: = OpFunction
+
+
+)" + BasicTypes() +
+                            " %10 = " + GetParam().image_type_decl + R"(
+         %11 = OpTypeSampledImage %10
+%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+
+        %100 = OpVariable %_ptr_UniformConstant_11 UniformConstant
+       %main = OpFunction %void None %voidfn
+     %main_0 = OpLabel
+        %101 = OpCopyObject %_ptr_UniformConstant_11 %100
+        %102 = OpLoad %11 %101
+        %103 = OpCopyObject %_ptr_UniformConstant_11 %101
+        %104 = OpCopyObject %11 %102 ;; this copy survives
+               OpReturn
+               OpFunctionEnd
+
+     ; The OpCopyObject instructions are removed.
+     ; The load of the combined image+sampler is replaced by a two loads, then
+     ; a combination operation. The only OpCopyObject that remains is the copy
+     ; of the copy of the sampled image value.
+     ; CHECK: %[[im:\d+]] = OpLoad %10 %[[image_var]]
+     ; CHECK: %[[s:\d+]] = OpLoad %[[sampler_ty]] %[[sampler_var]]
+     ; CHECK: %[[si:\d+]] = OpSampledImage %11 %[[im]] %[[s]]
+     ; CHECK-NEXT: OpCopyObject %11 %[[si]]
+     ; CHECK-NEXT: OpReturn
+)";
+  std::cout << kTest << std::endl;
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  std::cout << ";=disasm\n" << disasm << std::endl;
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
 INSTANTIATE_TEST_SUITE_P(AllCombinedTypes,
                          SplitCombinedImageSamplerPassTypeCaseTest,
                          ::testing::ValuesIn(ImageTypeCases()));
@@ -756,29 +816,66 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_ScalarNoChange) {
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
 
-TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage) {
+TEST_F(SplitCombinedImageSamplerPassTest,
+       FunctionBody_SampledImage_OpImageSample) {
   const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
                             ITypes() + R"(
 
-      ; CHECK: %f_ty = OpTypeFunction %float %uint %i_ty %s_ty %float
-      %f_ty = OpTypeFunction %float %uint %si_ty %float
+      ; CHECK: %f_ty = OpTypeFunction %v4float %uint %i_ty %s_ty %float
+      %f_ty = OpTypeFunction %v4float %uint %si_ty %float
 
-      ; CHECK: %f = OpFunction %float None %f_ty
-      ; CHECK-NEXT: OpFunctionParameter %uint
+      ; CHECK: %f = OpFunction %v4float None %f_ty
+      ; CHECK: OpFunctionParameter %uint
       ; CHECK-NEXT: %[[i:\w+]] = OpFunctionParameter %i_ty
       ; CHECK-NEXT: %[[s:\w+]] = OpFunctionParameter %s_ty
       ; CHECK-NEXT: OpFunctionParameter %float
       ; CHECK-NEXT: OpLabel
-      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %[[i]] %[[s]]
-      ; CHECK-NEXT: %201 = %si_ty %[[si]]
-      %f = OpFunction %float None %f_ty
+      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %si_ty %[[i]] %[[s]]
+      ; CHECK-NEXT: %200 = OpImageSampleExplicitLod %v4float %[[si]] %13 Lod %float_0
+      ; CHECK-NEXT: OpReturnValue %200
+
+      %f = OpFunction %v4float None %f_ty
       %100 = OpFunctionParameter %uint
-      %101 = OpFunctionParameter %si_ty
+      %101 = OpFunctionParameter %si_ty ; replace this
       %110 = OpFunctionParameter %float
       %120 = OpLabel
-      %201 = OpCopyObject %si_ty %101
-      OpReturnValue %float_0
+      %200 = OpImageSampleExplicitLod %v4float %101 %13 Lod %float_0
+      OpReturnValue %200
       OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage_OpImage) {
+  const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
+                            ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %uint %i_ty %s_ty %float
+      %f_ty = OpTypeFunction %void %uint %si_ty %float
+
+      ; CHECK: %f = OpFunction %v4float None %f_ty
+      ; CHECK: OpFunctionParameter %uint
+      ; CHECK-NEXT: %[[i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: OpFunctionParameter %float
+      ; CHECK-NEXT: OpLabel
+      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %si_ty %[[i]] %[[s]]
+      ; CHECK-NEXT: %200 = OpImage %i_ty %[[si]]
+      ; CHECK-NEXT: OpReturn
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %uint
+      %101 = OpFunctionParameter %si_ty ; replace this
+      %110 = OpFunctionParameter %float
+      %120 = OpLabel
+      %200 = OpImage %i_ty %101
+      OpReturn
+      OpFunctionEnd
+
       )" + Main();
 
   auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
@@ -790,10 +887,10 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_PtrSampledImage) {
   const std::string kTest = Preamble() + NamedITypes() + BasicTypes() +
                             ITypes() + R"(
 
-      ; CHECK: %f_ty = OpTypeFunction %float %uint %p_i_ty %p_s_ty %float
-      %f_ty = OpTypeFunction %float %uint %p_si_ty %float
+      ; CHECK: %f_ty = OpTypeFunction %v4float %uint %p_i_ty %p_s_ty %float
+      %f_ty = OpTypeFunction %v4float %uint %p_si_ty %float
 
-      ; CHECK: %f = OpFunction %float None %f_ty
+      ; CHECK: %f = OpFunction %v4float None %f_ty
       ; CHECK-NEXT: OpFunctionParameter %uint
       ; CHECK-NEXT: %[[pi:\w+]] = OpFunctionParameter %p_i_ty
       ; CHECK-NEXT: %[[ps:\w+]] = OpFunctionParameter %p_s_ty
@@ -801,16 +898,18 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_PtrSampledImage) {
       ; CHECK-NEXT: OpLabel
       ; CHECK-NEXT: %[[i:\w+]] = OpLoad %i_ty %[[pi]]
       ; CHECK-NEXT: %[[s:\w+]] = OpLoad %s_ty %[[ps]]
-      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %[[i]] %[[s]]
-      ; CHECK-NEXT: %130 = OpCopyObject %[[si]]
-      %f = OpFunction %float None %f_ty
+      ; CHECK-NEXT: %[[si:\w+]] = OpSampledImage %si_ty %[[i]] %[[s]]
+      ; CHECK-NEXT: %200 = OpImageSampleExplicitLod %v4float %[[si]] %13 Lod %float_0
+      ; CHECK-NEXT: OpReturnValue %200
+
+      %f = OpFunction %v4float None %f_ty
       %100 = OpFunctionParameter %uint
-      %101 = OpFunctionParameter %p_si_ty
+      %101 = OpFunctionParameter %p_si_ty ; replace this
       %110 = OpFunctionParameter %float
       %120 = OpLabel
-      %si = OpLoad %si_ty %101
-      %130 = OpCopyObject %si_ty %si
-      OpReturnValue %float_0
+      %121 = OpLoad %si_ty %101
+      %200 = OpImageSampleExplicitLod %v4float %121 %13 Lod %float_0
+      OpReturnValue %200
       OpFunctionEnd
       )" + Main();
 
