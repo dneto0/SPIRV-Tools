@@ -1159,6 +1159,52 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_PtrSampler_NoChange) {
   EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
 }
 
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_SampledImage_Split) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCombinedTypes() + NamedCaller() + BasicTypes() +
+                            ITypes() + CombinedTypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %i_ty %s_ty
+      %f_ty = OpTypeFunction %void %si_ty
+      %caller_ty = OpTypeFunction %float %si_ty
+
+      ; Call function arg is split. We've checked these details in other tests.
+      ; CHECK: %f = OpFunction %void None %i_ty %s_ty
+      ; CHECK-NEXT: %[[callee_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[callee_s:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: = OpLabel
+      ; CHECK-NEXT: OpReturn
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %f = OpFunction %void None %f_ty
+      %100 = OpFunctionParameter %si_ty
+      %110 = OpLabel
+      OpReturn
+      OpFunctionEnd
+
+      ; CHECK: %caller = OpFunction %float None %caller_ty
+      ; CHECK-NEXT: %[[caller_i:\w+]] = OpFunctionParameter %i_ty
+      ; CHECK-NEXT: %[[caller_s:\w+]] = OpFunctionParameter %s_ty
+      ; CHECK-NEXT: %caller_entry = OpLabel
+      ; CHECK-NEXT: OpFunctionCall %void %f %[[caller_i]] %[[caller_s]]
+      ; CHECK-NEXT: OpReturnValue %float_0
+      ; CHECK-NEXT: OpFunctionEnd
+
+      %caller = OpFunction %float None %caller_ty
+  %caller_arg = OpFunctionParameter %si_ty
+%caller_entry = OpLabel
+ %caller_call = OpFunctionCall %void %f %caller_arg
+                OpReturnValue %float_0
+                OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
+}
+
+
+// TODO(dneto): test additional args around the split
 
 #if 0
 std::vector<FunctionCallCase> FunctionCallCases() {
