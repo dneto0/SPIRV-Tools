@@ -92,13 +92,6 @@ std::vector<TypeCase> ImageTypeCases() {
   };
 }
 
-#if 0
-TEST_F(SplitCombinedImageSamplerPassTest, NoCombined_NoChange)
-TEST_F(SplitCombinedImageSamplerPassTest, Combined_
-TEST_F(SplitCombinedImageSamplerPassTest, CombinedBindingNumber
-TEST_F(SplitCombinedImageSamplerPassTest, BindingNumbersOtherResources)
-#endif
-
 std::string Preamble(const std::string shader_interface = "") {
   return R"(               OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -1411,8 +1404,6 @@ TEST_F(SplitCombinedImageSamplerPassTest,
       kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
-
-// TODO(dneto): test additional args around the split
 
 #if 0
 std::vector<FunctionCallCase> FunctionCallCases() {
