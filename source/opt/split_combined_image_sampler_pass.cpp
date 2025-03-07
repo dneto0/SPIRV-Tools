@@ -346,6 +346,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
             ++i;
           }
         }
+        def_use_mgr_->AnalyzeInstUse(use.user);
         break;
       }
       default: {
