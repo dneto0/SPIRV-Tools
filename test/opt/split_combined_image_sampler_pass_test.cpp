@@ -127,6 +127,7 @@ std::string BasicTypes() {
   return R"(      %float = OpTypeFloat 32
        %uint = OpTypeInt 32 0
         %int = OpTypeInt 32 1
+     %uint_0 = OpConstant %uint 0
     %float_0 = OpConstant %float 0
     %v2float = OpTypeVector %float 2
     %v3float = OpTypeVector %float 3
@@ -777,6 +778,15 @@ std::string NamedITypes() {
 )";
 }
 
+std::string NamedCaller() {
+  return R"(
+      OpName %caller_ty    "caller_ty"
+      OpName %caller       "caller"
+      OpName %caller_entry "caller_entry"
+      OpName %caller_si    "caller_si" ; sampled image value or ptr
+)";
+}
+
 std::string ITypes() {
   return R"(
       %i_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
@@ -857,7 +867,7 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_SampledImage_OpImage) {
       ; CHECK: %f_ty = OpTypeFunction %void %uint %i_ty %s_ty %float
       %f_ty = OpTypeFunction %void %uint %si_ty %float
 
-      ; CHECK: %f = OpFunction %v4float None %f_ty
+      ; CHECK: %f = OpFunction %void None %f_ty
       ; CHECK: OpFunctionParameter %uint
       ; CHECK-NEXT: %[[i:\w+]] = OpFunctionParameter %i_ty
       ; CHECK-NEXT: %[[s:\w+]] = OpFunctionParameter %s_ty
@@ -917,6 +927,55 @@ TEST_F(SplitCombinedImageSamplerPassTest, FunctionBody_PtrSampledImage) {
       kTest, /* do_validation= */ true);
   EXPECT_EQ(status, Pass::Status::SuccessWithChange) << disasm;
 }
+
+#if 0
+
+TEST_F(SplitCombinedImageSamplerPassTest, FunctionCall_NoImageOrSampler) {
+  const std::string kTest = Preamble() + NamedITypes() + NamedCaller() + BasicTypes() +
+                            ITypes() + R"(
+
+      ; CHECK: %f_ty = OpTypeFunction %void %uint %float
+      %f_ty = OpTypeFunction %void %uint %float
+      %caller_ty = OpTypeFunction %float  ; make it return non-void otherwise it's just like main
+
+      %f = OpFunction %v4float None %f_ty
+      %100 = OpFunctionParameter %uint
+      %101 = OpFunctionParameter %float
+      %110 = OpLabel
+      OpFunctionEnd
+
+ %caller = OpFunction %float None %caller_ty
+%caller_entry = OpLabel
+      OpFunctionCall %void %f %uint_0 %float_0
+      OpReturn %float_0
+      OpFunctionEnd
+
+      )" + Main();
+
+  auto [disasm, status] = SinglePassRunAndMatch<SplitCombinedImageSamplerPass>(
+      kTest, /* do_validation= */ true);
+  EXPECT_EQ(status, Pass::Status::SuccessWithoutChange) << disasm;
+}
+#endif
+
+#if 0
+std::vector<FunctionCallCase> FunctionCallCases() {
+  return std::vector<FunctionCallCase>{
+      {"", ""},
+      {" %i_ty", " %i_ty"},
+      {" %s_ty", " %s_ty"},
+      {" %si_ty", " %i_ty %s_ty"},
+      {" %uint %si_ty %float", " %uint %i_ty %s_ty %float"},
+      {" %p_i_ty", " %p_i_ty"},
+      {" %p_s_ty", " %p_s_ty"},
+      {" %p_si_ty", " %p_i_ty %p_s_ty"},
+      {" %uint %p_si_ty %float", " %uint %p_i_ty %p_s_ty %float"},
+      {" %uint %p_si_ty %p_si_ty %float",
+       " %uint %p_i_ty %p_s_ty %p_i_ty %p_s_ty %float"},
+  };
+};
+#endif
+
 
 }  // namespace
 }  // namespace opt
