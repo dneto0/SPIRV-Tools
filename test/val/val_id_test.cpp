@@ -4762,11 +4762,8 @@ OpFunctionEnd)";
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
   EXPECT_THAT(
       getDiagnosticString(),
-      HasSubstr(make_message(
-          "All OpSampledImage instructions must be in the same block in "
-          "which their Result <id> are consumed. OpSampledImage Result "
-          "Type <id> '23[%23]' has a consumer in a different basic "
-          "block. The consumer instruction <id> is '25[%25]'.")));
+      HasSubstr("sampled image value '23[%23]' is defined in one basic block, "
+                "but is used by '25[%25]' in a different basic block."));
 }
 
 // Invalid: OpSampledImage result <id> is used by OpSelect

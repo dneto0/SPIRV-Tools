@@ -23,6 +23,7 @@
 
 #include "source/ext_inst.h"
 #include "source/opcode.h"
+#include "source/operand.h"
 #include "source/table.h"
 #include "spirv-tools/libspirv.h"
 
@@ -109,6 +110,15 @@ class Instruction {
 
   size_t LineNum() const { return line_num_; }
   void SetLineNum(size_t pos) { line_num_ = pos; }
+
+  // Runs f(i) on each input ID operand 'i' to this instruction.
+  void ForEachInId(const std::function<void(uint32_t)>& f) const {
+    for (auto& operand : operands_) {
+      if (spvIsInIdType(operand.type)) {
+        f(words_[operand.offset]);
+      }
+    }
+  }
 
  private:
   const std::vector<uint32_t> words_;

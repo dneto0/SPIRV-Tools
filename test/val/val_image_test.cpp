@@ -3163,9 +3163,9 @@ TEST_F(ValidateImage, FetchSampledImageDirectly) {
 
   CompileSuccessfully(GenerateShaderCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpSampledImage instruction must not appear as operand "
-                        "for OpImageFetch"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("sampled image value must not be an operand of OpImageFetch"));
 }
 
 TEST_F(ValidateImage, FetchNotSampled) {
@@ -4346,9 +4346,10 @@ TEST_F(ValidateImage, QuerySizeLodSampledImageDirectly) {
 
   CompileSuccessfully(GenerateShaderCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpSampledImage instruction must not appear as operand "
-                        "for OpImageQuerySizeLod"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "sampled image value must not be an operand of OpImageQuerySizeLod"));
 }
 
 TEST_F(ValidateImage, QuerySizeLodMultisampledError) {
@@ -4485,9 +4486,10 @@ TEST_F(ValidateImage, QuerySizeSampledImageDirectly) {
 
   CompileSuccessfully(GenerateShaderCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpSampledImage instruction must not appear as operand "
-                        "for OpImageQuerySize"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "sampled image value must not be an operand of OpImageQuerySize."));
 }
 
 TEST_F(ValidateImage, QuerySizeDimSubpassDataBad) {
@@ -4683,9 +4685,10 @@ TEST_F(ValidateImage, QueryLevelsSampledImageDirectly) {
 
   CompileSuccessfully(GenerateShaderCode(body).c_str());
   ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpSampledImage instruction must not appear as operand "
-                        "for OpImageQueryLevels"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "sampled image value must not be an operand of OpImageQueryLevels."));
 }
 
 TEST_F(ValidateImage, QueryLevelsWrongDim) {
@@ -5872,9 +5875,9 @@ TEST_F(ValidateImage, Issue2463NoSegFault) {
 
   CompileSuccessfully(spirv);
   ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("OpSampledImage instruction must not appear as operand "
-                        "for OpReturnValue"));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("sampled image value must not be an operand of OpReturnValue"));
 }
 
 TEST_F(ValidateImage, SignExtendV13Bad) {

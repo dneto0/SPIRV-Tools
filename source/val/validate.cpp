@@ -217,51 +217,64 @@ spv_result_t ValidateBinaryUsingContextAndValidationState(
       // able to, briefly, de-const the instruction.
       Instruction* inst = const_cast<Instruction*>(&instruction);
 
-      if (inst->opcode() == spv::Op::OpEntryPoint) {
-        const auto entry_point = inst->GetOperandAs<uint32_t>(1);
-        const auto execution_model = inst->GetOperandAs<spv::ExecutionModel>(0);
-        const std::string desc_name = inst->GetOperandAs<std::string>(2);
+      switch (inst->opcode()) {
+        case spv::Op::OpEntryPoint: {
+          const auto entry_point = inst->GetOperandAs<uint32_t>(1);
+          const auto execution_model =
+              inst->GetOperandAs<spv::ExecutionModel>(0);
+          const std::string desc_name = inst->GetOperandAs<std::string>(2);
 
-        ValidationState_t::EntryPointDescription desc;
-        desc.name = desc_name;
+          ValidationState_t::EntryPointDescription desc;
+          desc.name = desc_name;
 
-        std::vector<uint32_t> interfaces;
-        for (size_t j = 3; j < inst->operands().size(); ++j)
-          desc.interfaces.push_back(inst->word(inst->operand(j).offset));
+          std::vector<uint32_t> interfaces;
+          for (size_t j = 3; j < inst->operands().size(); ++j)
+            desc.interfaces.push_back(inst->word(inst->operand(j).offset));
 
-        vstate->RegisterEntryPoint(entry_point, execution_model,
-                                   std::move(desc));
+          vstate->RegisterEntryPoint(entry_point, execution_model,
+                                     std::move(desc));
 
-        if (visited_entry_points.size() > 0) {
-          for (const Instruction* check_inst : visited_entry_points) {
-            const auto check_execution_model =
-                check_inst->GetOperandAs<spv::ExecutionModel>(0);
-            const std::string check_name =
-                check_inst->GetOperandAs<std::string>(2);
+          if (visited_entry_points.size() > 0) {
+            for (const Instruction* check_inst : visited_entry_points) {
+              const auto check_execution_model =
+                  check_inst->GetOperandAs<spv::ExecutionModel>(0);
+              const std::string check_name =
+                  check_inst->GetOperandAs<std::string>(2);
 
-            if (desc_name == check_name &&
-                execution_model == check_execution_model) {
-              return vstate->diag(SPV_ERROR_INVALID_DATA, inst)
-                     << "2 Entry points cannot share the same name and "
-                        "ExecutionMode.";
+              if (desc_name == check_name &&
+                  execution_model == check_execution_model) {
+                return vstate->diag(SPV_ERROR_INVALID_DATA, inst)
+                       << "2 Entry points cannot share the same name and "
+                          "ExecutionMode.";
+              }
             }
           }
-        }
-        visited_entry_points.push_back(inst);
+          visited_entry_points.push_back(inst);
 
-        has_mask_task_nv |= (execution_model == spv::ExecutionModel::TaskNV ||
-                             execution_model == spv::ExecutionModel::MeshNV);
-        has_mask_task_ext |= (execution_model == spv::ExecutionModel::TaskEXT ||
-                              execution_model == spv::ExecutionModel::MeshEXT);
-      }
-      if (inst->opcode() == spv::Op::OpFunctionCall) {
-        if (!vstate->in_function_body()) {
-          return vstate->diag(SPV_ERROR_INVALID_LAYOUT, &instruction)
-                 << "A FunctionCall must happen within a function body.";
-        }
+          has_mask_task_nv |= (execution_model == spv::ExecutionModel::TaskNV ||
+                               execution_model == spv::ExecutionModel::MeshNV);
+          has_mask_task_ext |=
+              (execution_model == spv::ExecutionModel::TaskEXT ||
+               execution_model == spv::ExecutionModel::MeshEXT);
+        } break;
 
-        const auto called_id = inst->GetOperandAs<uint32_t>(2);
-        vstate->AddFunctionCallTarget(called_id);
+        case spv::Op::OpFunctionCall: {
+          if (!vstate->in_function_body()) {
+            return vstate->diag(SPV_ERROR_INVALID_LAYOUT, &instruction)
+                   << "A FunctionCall must happen within a function body.";
+          }
+
+          const auto called_id = inst->GetOperandAs<uint32_t>(2);
+          vstate->AddFunctionCallTarget(called_id);
+        } break;
+
+        case spv::Op::OpTypeImage:
+        case spv::Op::OpTypeSampler:
+        case spv::Op::OpTypeSampledImage:
+          vstate->RegisterImageSamplerOrSampledImageType(inst->id());
+          break;
+        default:
+          break;
       }
 
       if (vstate->in_function_body()) {

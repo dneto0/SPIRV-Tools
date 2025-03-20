@@ -965,8 +965,12 @@ spv_result_t ValidateTypeSampledImage(ValidationState_t& _,
   return SPV_SUCCESS;
 }
 
-bool IsAllowedSampledImageOperand(spv::Op opcode, ValidationState_t& _) {
+// Returns true if an instruction with the given opcocde is allowed to have a
+// sampled image operand. (Other than OpPhi)
+bool IsAllowedToHaveSampledImageOperand(spv::Op opcode, ValidationState_t& _) {
   switch (opcode) {
+    case spv::Op::OpName:
+    case spv::Op::OpDecorate:
     case spv::Op::OpSampledImage:
     case spv::Op::OpImageSampleImplicitLod:
     case spv::Op::OpImageSampleExplicitLod:
@@ -996,7 +1000,9 @@ bool IsAllowedSampledImageOperand(spv::Op opcode, ValidationState_t& _) {
     case spv::Op::OpImageBlockMatchGatherSADQCOM:
     case spv::Op::OpImageBlockMatchGatherSSDQCOM:
     case spv::Op::OpImageSampleFootprintNV:
+    case spv::Op::OpConvertSampledImageToUNV:
       return true;
+    case spv::Op::OpSelect:
     case spv::Op::OpStore:
       if (_.HasCapability(spv::Capability::BindlessTextureNV)) return true;
       return false;
@@ -1067,55 +1073,6 @@ spv_result_t ValidateSampledImage(ValidationState_t& _,
   if (_.GetIdOpcode(_.GetOperandTypeId(inst, 3)) != spv::Op::OpTypeSampler) {
     return _.diag(SPV_ERROR_INVALID_DATA, inst)
            << "Expected Sampler to be of type OpTypeSampler";
-  }
-
-  // We need to validate 2 things:
-  // * All OpSampledImage instructions must be in the same block in which their
-  // Result <id> are consumed.
-  // * Result <id> from OpSampledImage instructions must not appear as operands
-  // to OpPhi instructions or OpSelect instructions, or any instructions other
-  // than the image lookup and query instructions specified to take an operand
-  // whose type is OpTypeSampledImage.
-  std::vector<Instruction*> consumers = _.getSampledImageConsumers(inst->id());
-  if (!consumers.empty()) {
-    for (auto consumer_instr : consumers) {
-      const auto consumer_opcode = consumer_instr->opcode();
-      if (consumer_instr->block() != inst->block()) {
-        return _.diag(SPV_ERROR_INVALID_ID, inst)
-               << "All OpSampledImage instructions must be in the same block "
-                  "in "
-                  "which their Result <id> are consumed. OpSampledImage Result "
-                  "Type <id> "
-               << _.getIdName(inst->id())
-               << " has a consumer in a different basic "
-                  "block. The consumer instruction <id> is "
-               << _.getIdName(consumer_instr->id()) << ".";
-      }
-
-      if (consumer_opcode == spv::Op::OpPhi ||
-          consumer_opcode == spv::Op::OpSelect) {
-        return _.diag(SPV_ERROR_INVALID_ID, inst)
-               << "Result <id> from OpSampledImage instruction must not appear "
-                  "as "
-                  "operands of Op"
-               << spvOpcodeString(static_cast<spv::Op>(consumer_opcode)) << "."
-               << " Found result <id> " << _.getIdName(inst->id())
-               << " as an operand of <id> " << _.getIdName(consumer_instr->id())
-               << ".";
-      }
-
-      if (!IsAllowedSampledImageOperand(consumer_opcode, _)) {
-        return _.diag(SPV_ERROR_INVALID_ID, inst)
-               << "Result <id> from OpSampledImage instruction must not appear "
-                  "as operand for Op"
-               << spvOpcodeString(static_cast<spv::Op>(consumer_opcode))
-               << ", since it is not specified as taking an "
-               << "OpTypeSampledImage."
-               << " Found result <id> " << _.getIdName(inst->id())
-               << " as an operand of <id> " << _.getIdName(consumer_instr->id())
-               << ".";
-      }
-    }
   }
 
   const Instruction* ld_inst;
@@ -2318,6 +2275,94 @@ spv_result_t ValidateImageProcessingQCOM(ValidationState_t& _,
   return res;
 }
 
+// Returns a failure status if an image, sampler, or sampled image value is used
+// by 'inst' in an invalid way:
+//
+// - When 'inst' is in a different basic block than the definition of the image,
+//   sampler, or sampled image.
+// - When 'inst' is an OpSelect, and not allowed by special cases:
+//     - pre-HLSL legalization
+//     - Bindles NV capability
+// - When 'inst' is using a sampled image value, but 'inst' should not.
+//
+// Note: Banned cases for OpPhi are checked by ValidatePhi
+spv_result_t ValidateImageAndSamplerUser(ValidationState_t& _,
+                                         const Instruction* inst) {
+  const auto opcode = inst->opcode();
+  if (opcode == spv::Op::OpPhi) {
+    // The OpPhi check is performed by ValidatePhi in validate_cfg.cpp
+    return SPV_SUCCESS;
+  }
+
+  auto status = SPV_SUCCESS;
+  inst->ForEachInId([&_, &status, inst, opcode](uint32_t operand_id) {
+    if (status != SPV_SUCCESS) return;
+    if (!_.IsImageSamplerOrSampledImageValue(operand_id)) return;
+    auto* def = _.FindDef(operand_id);
+    auto* def_block = def ? def->block() : nullptr;
+    if (!def_block) {
+      // A different check will fire an error for this case.
+      return;
+    }
+
+    spv::Op def_type_opcode = _.FindDef(def->type_id())->opcode();
+    const char* def_kind_str = nullptr;
+    switch (def_type_opcode) {
+      case spv::Op::OpTypeImage:
+        def_kind_str = "image";
+        break;
+      case spv::Op::OpTypeSampler:
+        def_kind_str = "sampler";
+        break;
+      case spv::Op::OpTypeSampledImage:
+        def_kind_str = "sampled image";
+        break;
+      default:
+        assert(false);  // otherwise bookeeping is incorrect.
+        break;
+    }
+
+    // Assume other checks verify that both the value and
+    // consumer are in basic blocks, and that definitions dominate uses,
+    // and that block order respects dominance.
+
+    if (!_.options()->before_hlsl_legalization) {
+      if (inst->block() && def_block != inst->block()) {
+        status = _.diag(SPV_ERROR_INVALID_ID, inst)
+                 << def_kind_str << " value " << _.getIdName(operand_id)
+                 << " is defined in one basic block, but is used by "
+                 << _.getIdName(inst->id()) << " in a different basic block.";
+        return;
+      }
+    }
+
+    if (opcode == spv::Op::OpSelect &&
+        !_.HasCapability(spv::Capability::BindlessTextureNV)) {
+      status = _.diag(SPV_ERROR_INVALID_ID, inst)
+               << def_kind_str << " value must not be an operand of Op"
+               << spvOpcodeString(static_cast<spv::Op>(opcode)) << "."
+               << " Found result <id> " << _.getIdName(operand_id)
+               << " as an operand of <id> " << _.getIdName(inst->id()) << ".";
+      return;
+    }
+
+    // TODO(dneto): This checks where a sample image can be used.
+    // It should also check the operand index.
+    // Also, we should add similar checks for sampler values and for image
+    // values.
+    if (def_type_opcode == spv::Op::OpTypeSampledImage &&
+        !IsAllowedToHaveSampledImageOperand(opcode, _)) {
+      status = _.diag(SPV_ERROR_INVALID_ID, inst)
+               << "sampled image value must not be an operand of Op"
+               << spvOpcodeString(static_cast<spv::Op>(opcode))
+               << ". Found result <id> " << _.getIdName(inst->id())
+               << " as an operand of <id> " << _.getIdName(inst->id()) << ".";
+      return;
+    }
+  });
+  return status;
+}
+
 }  // namespace
 
 // Validates correctness of image instructions.
@@ -2370,6 +2415,11 @@ spv_result_t ImagePass(ValidationState_t& _, const Instruction* inst) {
           }
           return true;
         });
+  }
+
+  spv_result_t status = ValidateImageAndSamplerUser(_, inst);
+  if (status != SPV_SUCCESS) {
+    return status;
   }
 
   switch (opcode) {

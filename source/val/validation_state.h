@@ -510,13 +510,16 @@ class ValidationState_t {
     return all_definitions_;
   }
 
-  /// Returns a vector containing the instructions that consume the given
-  /// SampledImage id.
-  std::vector<Instruction*> getSampledImageConsumers(uint32_t id) const;
+  /// Records the ID of a image type, sampler type, or sampled image type.
+  void RegisterImageSamplerOrSampledImageType(uint32_t id) {
+    image_sampler_types_.insert(id);
+  }
 
-  /// Records cons_id as a consumer of sampled_image_id.
-  void RegisterSampledImageConsumer(uint32_t sampled_image_id,
-                                    Instruction* consumer);
+  /// Returns true if the given ID is an image value, sampler value, or sampled
+  /// image value.
+  bool IsImageSamplerOrSampledImageValue(uint32_t id) {
+    return image_sampler_values_.count(id) != 0;
+  }
 
   // Record a cons_id as a consumer of texture_id
   // if texture 'texture_id' has a QCOM image processing decoration
@@ -888,10 +891,16 @@ class ValidationState_t {
   /// IDs that have been declared as forward pointers.
   std::unordered_set<uint32_t> forward_pointer_ids_;
 
-  /// Stores a vector of instructions that use the result of a given
-  /// OpSampledImage instruction.
+  /// Set of IDs of type definitions for an image, sampler, or sampled image.
+  std::unordered_set<uint32_t> image_sampler_types_;
+
+  /// Set of IDs of values of image type, sampler type, or sampled image type.
+  std::unordered_set<uint32_t> image_sampler_values_;
+
+  /// Maps the ID of an instruction that reutrns an image,
+  /// sampler, or sampled image.
   std::unordered_map<uint32_t, std::vector<Instruction*>>
-      sampled_image_consumers_;
+      image_sampler_consumers_;
 
   /// Stores load instructions that load textures used
   //  in QCOM image processing functions

@@ -574,12 +574,11 @@ void ValidationState_t::RegisterInstruction(Instruction* inst) {
         continue;
       }
 
-      // If the instruction is using an OpTypeSampledImage as an operand, it
-      // should be recorded. The validator will ensure that all usages of an
-      // OpTypeSampledImage and its definition are in the same basic block.
-      if ((SPV_OPERAND_TYPE_ID == operand.type) &&
-          (spv::Op::OpSampledImage == operand_inst->opcode())) {
-        RegisterSampledImageConsumer(operand_word, inst);
+      // Record definitions of image value, sampler value, and sampled image
+      // values.
+      const auto type_id = inst->type_id();
+      if (type_id != 0 && image_sampler_types_.count(type_id)) {
+        image_sampler_values_.insert(inst->id());
       }
 
       // In order to track storage classes (not Function) used per execution
@@ -598,21 +597,6 @@ void ValidationState_t::RegisterInstruction(Instruction* inst) {
       }
     }
   }
-}
-
-std::vector<Instruction*> ValidationState_t::getSampledImageConsumers(
-    uint32_t sampled_image_id) const {
-  std::vector<Instruction*> result;
-  auto iter = sampled_image_consumers_.find(sampled_image_id);
-  if (iter != sampled_image_consumers_.end()) {
-    result = iter->second;
-  }
-  return result;
-}
-
-void ValidationState_t::RegisterSampledImageConsumer(uint32_t sampled_image_id,
-                                                     Instruction* consumer) {
-  sampled_image_consumers_[sampled_image_id].push_back(consumer);
 }
 
 void ValidationState_t::RegisterQCOMImageProcessingTextureConsumer(
