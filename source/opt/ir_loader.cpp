@@ -57,7 +57,8 @@ bool IrLoader::AddInstruction(const spv_parsed_instruction_t* inst) {
   if (IsLineInst(inst)) {
     module()->SetContainsDebugInfo();
     last_line_inst_.reset();
-    dbg_line_info_.emplace_back(module()->context(), *inst, last_dbg_scope_);
+    dbg_line_info_.emplace_back(
+        Instruction{module()->context(), *inst, last_dbg_scope_});
     return true;
   }
 
@@ -111,18 +112,18 @@ bool IrLoader::AddInstruction(const spv_parsed_instruction_t* inst) {
       new Instruction(module()->context(), *inst, std::move(dbg_line_info_)));
   if (!spv_inst->dbg_line_insts().empty()) {
     if (extra_line_tracking_ &&
-        (!spv_inst->dbg_line_insts().back().IsNoLine())) {
+        (!spv_inst->dbg_line_insts().back()->IsNoLine())) {
       last_line_inst_ = std::unique_ptr<Instruction>(
-          spv_inst->dbg_line_insts().back().Clone(module()->context()));
+          spv_inst->dbg_line_insts().back()->Clone(module()->context()));
       if (last_line_inst_->IsDebugLineInst())
         last_line_inst_->SetResultId(module()->context()->TakeNextId());
     }
     dbg_line_info_.clear();
   } else if (last_line_inst_ != nullptr) {
     last_line_inst_->SetDebugScope(last_dbg_scope_);
-    spv_inst->dbg_line_insts().push_back(*last_line_inst_);
+    spv_inst->dbg_line_insts().push_back(std::move(last_line_inst_));
     last_line_inst_ = std::unique_ptr<Instruction>(
-        spv_inst->dbg_line_insts().back().Clone(module()->context()));
+        spv_inst->dbg_line_insts().back()->Clone(module()->context()));
     if (last_line_inst_->IsDebugLineInst())
       last_line_inst_->SetResultId(module()->context()->TakeNextId());
   }

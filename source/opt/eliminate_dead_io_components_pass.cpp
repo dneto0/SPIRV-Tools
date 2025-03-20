@@ -148,7 +148,7 @@ unsigned EliminateDeadIOComponentsPass::FindMaxIndex(
   bool seen_non_const_ac = false;
   assert(var.opcode() == spv::Op::OpVariable && "must be variable");
   context()->get_def_use_mgr()->WhileEachUser(
-      var.result_id(), [&max, &seen_non_const_ac, var, skip_first_index,
+      var.result_id(), [&max, &seen_non_const_ac, &var, skip_first_index,
                         this](Instruction* use) {
         auto use_opcode = use->opcode();
         if (use_opcode == spv::Op::OpLoad || use_opcode == spv::Op::OpStore ||

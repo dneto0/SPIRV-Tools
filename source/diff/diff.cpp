@@ -551,7 +551,7 @@ class Differ {
                            spv_parsed_instruction_t* parsed_inst,
                            std::vector<spv_parsed_operand_t>& parsed_operands,
                            std::vector<uint32_t>& inst_binary);
-  opt::Instruction ToMappedSrcIds(const opt::Instruction& dst_inst);
+  std::unique_ptr<opt::Instruction> ToMappedSrcIds(const opt::Instruction& dst_inst);
 
   void OutputRed() {
     if (options_.color_output) out_ << spvtools::clr::red{true};
@@ -2703,7 +2703,8 @@ void Differ::OutputSection(
     while (dst_iter != dst_insts.end() &&
            MappedSrcInst(IterInst(dst_iter)) == nullptr) {
       out_ << "+";
-      write_inst(ToMappedSrcIds(*IterInst(dst_iter)), dst_id_to_,
+      auto inst{ToMappedSrcIds(*IterInst(dst_iter))};
+      write_inst(*(inst.get()), dst_id_to_,
                  *IterInst(dst_iter));
       ++dst_iter;
     }
@@ -2724,7 +2725,8 @@ void Differ::OutputSection(
             write_inst(*src_inst, src_id_to_, *src_inst);
           },
           [this, matched_dst_inst, &write_inst]() {
-            write_inst(ToMappedSrcIds(*matched_dst_inst), dst_id_to_,
+            auto inst{ToMappedSrcIds(*matched_dst_inst)};
+            write_inst(*(inst.get()), dst_id_to_,
                        *matched_dst_inst);
           });
 
@@ -2773,14 +2775,14 @@ void Differ::ToParsedInstruction(
   }
 }
 
-opt::Instruction Differ::ToMappedSrcIds(const opt::Instruction& dst_inst) {
+std::unique_ptr<opt::Instruction> Differ::ToMappedSrcIds(const opt::Instruction& dst_inst) {
   // Create an identical instruction to dst_inst, except ids are changed to the
   // mapped one.
-  opt::Instruction mapped_inst = dst_inst;
+  std::unique_ptr<opt::Instruction> mapped_inst{dst_inst.Clone(dst_inst.context())};
 
-  for (uint32_t operand_index = 0; operand_index < mapped_inst.NumOperands();
+  for (uint32_t operand_index = 0; operand_index < mapped_inst->NumOperands();
        ++operand_index) {
-    opt::Operand& operand = mapped_inst.GetOperand(operand_index);
+    opt::Operand& operand = mapped_inst->GetOperand(operand_index);
 
     if (spvIsIdType(operand.type)) {
       assert(id_map_.IsDstMapped(operand.AsId()));

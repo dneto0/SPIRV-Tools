@@ -214,7 +214,7 @@ void MergeWithSuccessor(IRContext* context, Function* func,
         new_vec.insert(new_vec.end(), vec.begin(), vec.end());
         terminator->ClearDbgLineInsts();
         for (auto& l_inst : new_vec)
-          context->get_def_use_mgr()->AnalyzeInstDefUse(&l_inst);
+          context->get_def_use_mgr()->AnalyzeInstDefUse(l_inst.get());
       }
       // Clear debug scope of terminator to avoid DebugScope
       // emitted between terminator and merge.

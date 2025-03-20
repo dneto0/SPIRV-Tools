@@ -180,7 +180,8 @@ Instruction* IRContext::KillInst(Instruction* inst) {
   if (AreAnalysesValid(kAnalysisDefUse)) {
     analysis::DefUseManager* def_use_mgr = get_def_use_mgr();
     def_use_mgr->ClearInst(inst);
-    for (auto& l_inst : inst->dbg_line_insts()) def_use_mgr->ClearInst(&l_inst);
+    for (auto& l_inst : inst->dbg_line_insts())
+      def_use_mgr->ClearInst(l_inst.get());
   }
   if (AreAnalysesValid(kAnalysisInstrToBlockMapping)) {
     instr_to_block_.erase(inst);
@@ -1040,7 +1041,7 @@ void IRContext::EmitErrorMessage(std::string message, Instruction* inst) {
   Instruction* line_inst = inst;
   while (line_inst != nullptr) {  // Stop at the beginning of the basic block.
     if (!line_inst->dbg_line_insts().empty()) {
-      line_inst = &line_inst->dbg_line_insts().back();
+      line_inst = line_inst->dbg_line_insts().back().get();
       if (line_inst->IsNoLine()) {
         line_inst = nullptr;
       }

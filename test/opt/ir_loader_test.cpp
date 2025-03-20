@@ -243,11 +243,11 @@ TEST(IrBuilder, DistributeLineDebugInfo) {
     auto& lines = def_use_mgr->GetDef(check.id)->dbg_line_insts();
     for (uint32_t i = 0; i < check.line_numbers.size(); ++i) {
       if (check.line_numbers[i] == kNoLine) {
-        EXPECT_EQ(lines[i].opcode(), spv::Op::OpNoLine);
+        EXPECT_EQ(lines[i]->opcode(), spv::Op::OpNoLine);
         continue;
       }
-      EXPECT_EQ(lines[i].opcode(), spv::Op::OpLine);
-      EXPECT_EQ(lines[i].GetSingleWordOperand(kOpLineOperandLineIndex),
+      EXPECT_EQ(lines[i]->opcode(), spv::Op::OpLine);
+      EXPECT_EQ(lines[i]->GetSingleWordOperand(kOpLineOperandLineIndex),
                 check.line_numbers[i]);
     }
   }

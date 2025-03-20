@@ -28,7 +28,7 @@ void FeatureManager::Analyze(Module* module) {
 }
 
 void FeatureManager::AddExtensions(Module* module) {
-  for (auto ext : module->extensions()) {
+  for (auto& ext : module->extensions()) {
     AddExtension(&ext);
   }
 }

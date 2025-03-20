@@ -64,14 +64,14 @@ Instruction::Instruction(IRContext* c, spv::Op op)
       dbg_scope_(kNoDebugScope, kNoInlinedAt) {}
 
 Instruction::Instruction(IRContext* c, const spv_parsed_instruction_t& inst,
-                         std::vector<Instruction>&& dbg_line)
+                         std::vector<std::unique_ptr<Instruction>>&& dbg_line)
     : utils::IntrusiveNodeBase<Instruction>(),
       context_(c),
       opcode_(static_cast<spv::Op>(inst.opcode)),
       has_type_id_(inst.type_id != 0),
       has_result_id_(inst.result_id != 0),
       unique_id_(c->TakeNextUniqueId()),
-      dbg_line_insts_(std::move(dbg_line)),
+      dbg_line_insts_(dbg_line),
       dbg_scope_(kNoDebugScope, kNoInlinedAt) {
   operands_.reserve(inst.num_operands);
   for (uint32_t i = 0; i < inst.num_operands; ++i) {
@@ -141,8 +141,9 @@ Instruction::Instruction(Instruction&& that)
       operands_(std::move(that.operands_)),
       dbg_line_insts_(std::move(that.dbg_line_insts_)),
       dbg_scope_(that.dbg_scope_) {
-  for (auto& i : dbg_line_insts_) {
-    i.dbg_scope_ = that.dbg_scope_;
+  for (std::unique_ptr<Instruction>& i : dbg_line_insts_) {
+    auto that_scope = that.dbg_scope_;
+    i.get()->dbg_scope_ = that_scope;
   }
 }
 
@@ -167,8 +168,8 @@ Instruction* Instruction::Clone(IRContext* c) const {
   clone->operands_ = operands_;
   clone->dbg_line_insts_ = dbg_line_insts_;
   for (auto& i : clone->dbg_line_insts_) {
-    i.unique_id_ = c->TakeNextUniqueId();
-    if (i.IsDebugLineInst()) i.SetResultId(c->TakeNextId());
+    i->unique_id_ = c->TakeNextUniqueId();
+    if (i->IsDebugLineInst()) i->SetResultId(c->TakeNextId());
   }
   clone->dbg_scope_ = dbg_scope_;
   return clone;
@@ -520,7 +521,7 @@ bool Instruction::IsReadOnlyPointerKernel() const {
 void Instruction::UpdateLexicalScope(uint32_t scope) {
   dbg_scope_.SetLexicalScope(scope);
   for (auto& i : dbg_line_insts_) {
-    i.dbg_scope_.SetLexicalScope(scope);
+    i->dbg_scope_.SetLexicalScope(scope);
   }
   if (!IsLineInst() &&
       context()->AreAnalysesValid(IRContext::kAnalysisDebugInfo)) {
@@ -531,7 +532,7 @@ void Instruction::UpdateLexicalScope(uint32_t scope) {
 void Instruction::UpdateDebugInlinedAt(uint32_t new_inlined_at) {
   dbg_scope_.SetInlinedAt(new_inlined_at);
   for (auto& i : dbg_line_insts_) {
-    i.dbg_scope_.SetInlinedAt(new_inlined_at);
+    i->dbg_scope_.SetInlinedAt(new_inlined_at);
   }
   if (!IsLineInst() &&
       context()->AreAnalysesValid(IRContext::kAnalysisDebugInfo)) {
@@ -542,7 +543,7 @@ void Instruction::UpdateDebugInlinedAt(uint32_t new_inlined_at) {
 void Instruction::ClearDbgLineInsts() {
   if (context()->AreAnalysesValid(IRContext::kAnalysisDefUse)) {
     auto def_use_mgr = context()->get_def_use_mgr();
-    for (auto& l_inst : dbg_line_insts_) def_use_mgr->ClearInst(&l_inst);
+    for (auto& l_inst : dbg_line_insts_) def_use_mgr->ClearInst(l_inst.get());
   }
   clear_dbg_line_insts();
 }
@@ -550,8 +551,14 @@ void Instruction::ClearDbgLineInsts() {
 void Instruction::UpdateDebugInfoFrom(const Instruction* from) {
   if (from == nullptr) return;
   ClearDbgLineInsts();
-  if (!from->dbg_line_insts().empty())
-    AddDebugLine(&from->dbg_line_insts().back());
+  // Clone the debug instructions for 'from'.
+  if (!from->dbg_line_insts().empty()) {
+    for (auto& line: from->dbg_line_insts()) {
+      Instruction* clone = line->Clone(context());
+      std::unique_ptr<Instruction> uc{clone};
+      AddDebugLine(std::move(uc));
+    }
+  }
   SetDebugScope(from->GetDebugScope());
   if (!IsLineInst() &&
       context()->AreAnalysesValid(IRContext::kAnalysisDebugInfo)) {
@@ -559,13 +566,14 @@ void Instruction::UpdateDebugInfoFrom(const Instruction* from) {
   }
 }
 
-void Instruction::AddDebugLine(const Instruction* inst) {
-  dbg_line_insts_.push_back(*inst);
-  dbg_line_insts_.back().unique_id_ = context()->TakeNextUniqueId();
-  if (inst->IsDebugLineInst())
-    dbg_line_insts_.back().SetResultId(context_->TakeNextId());
+void Instruction::AddDebugLine(std::unique_ptr<Instruction> inst) {
+  dbg_line_insts_.push_back(std::move(inst));
+  Instruction* ptr = dbg_line_insts_.back().get();
+  ptr->unique_id_ = context()->TakeNextUniqueId();
+  if (ptr->IsDebugLineInst())
+    ptr->SetResultId(context_->TakeNextId());
   if (context()->AreAnalysesValid(IRContext::kAnalysisDefUse))
-    context()->get_def_use_mgr()->AnalyzeInstDefUse(&dbg_line_insts_.back());
+    context()->get_def_use_mgr()->AnalyzeInstDefUse(ptr);
 }
 
 bool Instruction::IsDebugLineInst() const {

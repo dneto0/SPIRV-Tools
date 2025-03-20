@@ -361,10 +361,10 @@ void AggressiveDCEPass::AddDebugScopeToWorkList(const Instruction* inst) {
 void AggressiveDCEPass::AddDebugInstructionsToWorkList(
     const Instruction* inst) {
   for (auto& line_inst : inst->dbg_line_insts()) {
-    if (line_inst.IsDebugLineInst()) {
-      AddOperandsToWorkList(&line_inst);
+    if (line_inst->IsDebugLineInst()) {
+      AddOperandsToWorkList(line_inst.get());
     }
-    AddDebugScopeToWorkList(&line_inst);
+    AddDebugScopeToWorkList(line_inst.get());
   }
   AddDebugScopeToWorkList(inst);
 }

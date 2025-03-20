@@ -133,7 +133,10 @@ void Module::ForEachInst(const std::function<void(const Instruction*)>& f,
         /* run_on_non_semantic_insts = */ true);
   }
   if (run_on_debug_line_insts) {
-    for (auto& i : trailing_dbg_line_info_) DELEGATE(i);
+    for (auto& i : trailing_dbg_line_info_) {
+      static_cast<const Instruction*>(i.get())->ForEachInst(
+          f, run_on_debug_line_insts);
+    }
   }
 #undef DELEGATE
 }

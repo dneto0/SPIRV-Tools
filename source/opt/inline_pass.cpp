@@ -87,14 +87,14 @@ void InlinePass::AddLoopMerge(uint32_t merge_id, uint32_t continue_id,
 
 void InlinePass::AddStore(uint32_t ptr_id, uint32_t val_id,
                           std::unique_ptr<BasicBlock>* block_ptr,
-                          const Instruction* line_inst,
+                          std::unique_ptr<Instruction> line_inst,
                           const DebugScope& dbg_scope) {
   std::unique_ptr<Instruction> newStore(
       new Instruction(context(), spv::Op::OpStore, 0, 0,
                       {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {ptr_id}},
                        {spv_operand_type_t::SPV_OPERAND_TYPE_ID, {val_id}}}));
-  if (line_inst != nullptr) {
-    newStore->AddDebugLine(line_inst);
+  if (line_inst.get() != nullptr) {
+    newStore->AddDebugLine(std::move(line_inst));
   }
   newStore->SetDebugScope(dbg_scope);
   (*block_ptr)->AddInstruction(std::move(newStore));
@@ -102,13 +102,13 @@ void InlinePass::AddStore(uint32_t ptr_id, uint32_t val_id,
 
 void InlinePass::AddLoad(uint32_t type_id, uint32_t resultId, uint32_t ptr_id,
                          std::unique_ptr<BasicBlock>* block_ptr,
-                         const Instruction* line_inst,
+                         std::unique_ptr<Instruction> line_inst,
                          const DebugScope& dbg_scope) {
   std::unique_ptr<Instruction> newLoad(
       new Instruction(context(), spv::Op::OpLoad, type_id, resultId,
                       {{spv_operand_type_t::SPV_OPERAND_TYPE_ID, {ptr_id}}}));
-  if (line_inst != nullptr) {
-    newLoad->AddDebugLine(line_inst);
+  if (line_inst.get() != nullptr) {
+    newLoad->AddDebugLine(std::move(line_inst));
   }
   newLoad->SetDebugScope(dbg_scope);
   (*block_ptr)->AddInstruction(std::move(newLoad));
@@ -327,7 +327,7 @@ InstructionList::iterator InlinePass::AddStoresForVariableInitializers(
       // The initializer must be a constant or global value.  No mapped
       // should be used.
       uint32_t val_id = callee_itr->GetSingleWordInOperand(1);
-      AddStore(new_var_id, val_id, new_blk_ptr, callee_itr->dbg_line_inst(),
+      AddStore(new_var_id, val_id, new_blk_ptr, callee_itr->clone_dbg_line_inst(),
                context()->get_debug_info_mgr()->BuildDebugScope(
                    callee_itr->GetDebugScope(), inlined_at_ctx));
     }
@@ -391,7 +391,7 @@ std::unique_ptr<BasicBlock> InlinePass::InlineReturn(
     if (mapItr != callee2caller.end()) {
       valId = mapItr->second;
     }
-    AddStore(returnVarId, valId, &new_blk_ptr, inst->dbg_line_inst(),
+    AddStore(returnVarId, valId, &new_blk_ptr, inst->clone_dbg_line_inst(),
              context()->get_debug_info_mgr()->BuildDebugScope(
                  inst->GetDebugScope(), inlined_at_ctx));
   }
@@ -677,7 +677,7 @@ bool InlinePass::GenInlineCode(
     const uint32_t resId = call_inst_itr->result_id();
     assert(resId != 0);
     AddLoad(calleeTypeId, resId, returnVarId, &new_blk_ptr,
-            call_inst_itr->dbg_line_inst(), call_inst_itr->GetDebugScope());
+            call_inst_itr->clone_dbg_line_inst(), call_inst_itr->GetDebugScope());
   }
 
   // Move instructions of original caller block after call instruction.

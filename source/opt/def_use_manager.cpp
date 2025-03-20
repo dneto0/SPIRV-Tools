@@ -68,7 +68,7 @@ void DefUseManager::AnalyzeInstDefUse(Instruction* inst) {
   AnalyzeInstUse(inst);
   // Analyze lines last otherwise they will be cleared when inst is
   // cleared by preceding two calls
-  for (auto& l_inst : inst->dbg_line_insts()) AnalyzeInstDefUse(&l_inst);
+  for (auto& l_inst : inst->dbg_line_insts()) AnalyzeInstDefUse(l_inst.get());
 }
 
 void DefUseManager::UpdateDefUse(Instruction* inst) {

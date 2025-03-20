@@ -567,7 +567,7 @@ void MergeReturnPass::RecordReturned(BasicBlock* block) {
 }
 
 void MergeReturnPass::RecordReturnValue(BasicBlock* block) {
-  auto terminator = *block->tail();
+  auto& terminator = *block->tail();
   if (terminator.opcode() != spv::Op::OpReturnValue) {
     return;
   }

@@ -36,7 +36,7 @@ bool ModifyMaximalReconvergence::AddMaximalReconvergence() {
   bool has_extension = false;
   bool has_shader =
       context()->get_feature_mgr()->HasCapability(spv::Capability::Shader);
-  for (auto extension : context()->extensions()) {
+  for (auto& extension : context()->extensions()) {
     if (extension.GetOperand(0).AsString() == "SPV_KHR_maximal_reconvergence") {
       has_extension = true;
       break;
@@ -44,14 +44,14 @@ bool ModifyMaximalReconvergence::AddMaximalReconvergence() {
   }
 
   std::unordered_set<uint32_t> entry_points_with_mode;
-  for (auto mode : get_module()->execution_modes()) {
+  for (auto& mode : get_module()->execution_modes()) {
     if (spv::ExecutionMode(mode.GetSingleWordInOperand(1)) ==
         spv::ExecutionMode::MaximallyReconvergesKHR) {
       entry_points_with_mode.insert(mode.GetSingleWordInOperand(0));
     }
   }
 
-  for (auto entry_point : get_module()->entry_points()) {
+  for (auto& entry_point : get_module()->entry_points()) {
     const uint32_t id = entry_point.GetSingleWordInOperand(1);
     if (!entry_points_with_mode.count(id)) {
       changed = true;

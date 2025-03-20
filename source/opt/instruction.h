@@ -206,7 +206,7 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   // record of line-related debug instructions |dbg_line| ahead of this
   // instruction, if any.
   Instruction(IRContext* c, const spv_parsed_instruction_t& inst,
-              std::vector<Instruction>&& dbg_line = {});
+              std::vector<std::unique_ptr<Instruction>>&& dbg_line = {});
 
   Instruction(IRContext* c, const spv_parsed_instruction_t& inst,
               const DebugScope& dbg_scope);
@@ -218,8 +218,8 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
 
   // TODO: I will want to remove these, but will first have to remove the use of
   // std::vector<Instruction>.
-  Instruction(const Instruction&) = default;
-  Instruction& operator=(const Instruction&) = default;
+  Instruction(const Instruction&) = delete;
+  Instruction& operator=(const Instruction&) = delete;
 
   Instruction(Instruction&&);
   Instruction& operator=(Instruction&&);
@@ -253,17 +253,33 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   }
   // Returns the vector of line-related debug instructions attached to this
   // instruction and the caller can directly modify them.
-  std::vector<Instruction>& dbg_line_insts() { return dbg_line_insts_; }
-  const std::vector<Instruction>& dbg_line_insts() const {
+  std::vector<std::unique_ptr<Instruction>>& dbg_line_insts() {
+    return dbg_line_insts_;
+  }
+  const std::vector<std::unique_ptr<Instruction>>& dbg_line_insts() const {
     return dbg_line_insts_;
   }
 
   const Instruction* dbg_line_inst() const {
-    return dbg_line_insts_.empty() ? nullptr : &dbg_line_insts_[0];
+    return dbg_line_insts_.empty() ? nullptr : dbg_line_insts_[0].get();
+  }
+
+  // If there is a debug line instruction, returns a clone of it.
+  // Otherwise returns null.
+  std::unique_ptr<Instruction> clone_dbg_line_inst() const {
+    std::unique_ptr<Instruction> result{
+    dbg_line_insts_.empty() ? nullptr : dbg_line_insts_[0].get()->Clone(context())};
+    return result;
   }
 
   // Clear line-related debug instructions attached to this instruction.
   void clear_dbg_line_insts() { dbg_line_insts_.clear(); }
+
+  // Returns the contents of the debug instruction list, and clears it.
+  std::vector<std::unique_ptr<Instruction>>&& take_dbg_line_insts() {
+    return std::move(std::exchange(
+        dbg_line_insts_, std::vector<std::unique_ptr<Instruction>>{}));
+  }
 
   // Same semantics as in the base class except the list the InstructionList
   // containing |pos| will now assume ownership of |this|.
@@ -318,7 +334,7 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   inline void SetDebugScope(const DebugScope& scope);
   inline const DebugScope& GetDebugScope() const { return dbg_scope_; }
   // Add debug line inst. Renew result id if Debug[No]Line
-  void AddDebugLine(const Instruction* inst);
+  void AddDebugLine(std::unique_ptr<Instruction> inst);
   // Updates DebugInlinedAt of DebugScope and OpLine.
   void UpdateDebugInlinedAt(uint32_t new_inlined_at);
   // Clear line-related debug instructions attached to this instruction
@@ -640,7 +656,7 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   // Op[No]Line or Debug[No]Line instructions preceding this instruction. Note
   // that for Instructions representing Op[No]Line or Debug[No]Line themselves,
   // this field should be empty.
-  std::vector<Instruction> dbg_line_insts_;
+  std::vector<std::unique_ptr<Instruction>> dbg_line_insts_;
 
   // DebugScope that wraps this instruction.
   DebugScope dbg_scope_;
@@ -723,7 +739,7 @@ inline void Instruction::SetResultId(uint32_t res_id) {
 inline void Instruction::SetDebugScope(const DebugScope& scope) {
   dbg_scope_ = scope;
   for (auto& i : dbg_line_insts_) {
-    i.dbg_scope_ = scope;
+    i->dbg_scope_ = scope;
   }
 }
 
@@ -757,7 +773,7 @@ inline bool Instruction::WhileEachInst(
     const std::function<bool(Instruction*)>& f, bool run_on_debug_line_insts) {
   if (run_on_debug_line_insts) {
     for (auto& dbg_line : dbg_line_insts_) {
-      if (!f(&dbg_line)) return false;
+      if (!f(dbg_line.get())) return false;
     }
   }
   return f(this);
@@ -768,7 +784,7 @@ inline bool Instruction::WhileEachInst(
     bool run_on_debug_line_insts) const {
   if (run_on_debug_line_insts) {
     for (auto& dbg_line : dbg_line_insts_) {
-      if (!f(&dbg_line)) return false;
+      if (!f(dbg_line.get())) return false;
     }
   }
   return f(this);

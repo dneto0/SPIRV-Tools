@@ -60,12 +60,12 @@ class InlinePass : public Pass {
   // Add store of valId to ptrId to end of block block_ptr.
   void AddStore(uint32_t ptrId, uint32_t valId,
                 std::unique_ptr<BasicBlock>* block_ptr,
-                const Instruction* line_inst, const DebugScope& dbg_scope);
+                std::unique_ptr<Instruction> line_inst, const DebugScope& dbg_scope);
 
   // Add load of ptrId into resultId to end of block block_ptr.
   void AddLoad(uint32_t typeId, uint32_t resultId, uint32_t ptrId,
                std::unique_ptr<BasicBlock>* block_ptr,
-               const Instruction* line_inst, const DebugScope& dbg_scope);
+               std::unique_ptr<Instruction> line_inst, const DebugScope& dbg_scope);
 
   // Return new label.
   std::unique_ptr<Instruction> NewLabel(uint32_t label_id);

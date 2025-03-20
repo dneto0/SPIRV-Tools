@@ -749,7 +749,7 @@ void LoopUnrollerUtilsImpl::FoldConditionBlock(BasicBlock* condition_block,
   uint32_t new_target = old_branch.GetSingleWordOperand(operand_label);
 
   DebugScope scope = old_branch.GetDebugScope();
-  const std::vector<Instruction> lines = old_branch.dbg_line_insts();
+  auto lines{old_branch.take_dbg_line_insts()};
 
   context_->KillInst(&old_branch);
   // Add the new unconditional branch to the merge block.
@@ -759,7 +759,10 @@ void LoopUnrollerUtilsImpl::FoldConditionBlock(BasicBlock* condition_block,
           IRContext::Analysis::kAnalysisInstrToBlockMapping);
   Instruction* new_branch = builder.AddBranch(new_target);
 
-  if (!lines.empty()) new_branch->AddDebugLine(&lines.back());
+  for (auto& line: lines) {
+    new_branch->AddDebugLine(std::move(line));
+  }
+  lines.clear();
   new_branch->SetDebugScope(scope);
 }
 
@@ -874,7 +877,7 @@ void LoopUnrollerUtilsImpl::AssignNewResultIds(BasicBlock* basic_block) {
   for (Instruction& inst : *basic_block) {
     // Do def/use analysis on new lines
     for (auto& line : inst.dbg_line_insts())
-      def_use_mgr->AnalyzeInstDefUse(&line);
+      def_use_mgr->AnalyzeInstDefUse(line.get());
 
     uint32_t old_id = inst.result_id();
 

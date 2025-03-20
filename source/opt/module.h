@@ -280,15 +280,15 @@ class Module {
   IRContext* context() const { return context_; }
 
   // Sets the trailing debug line info to |dbg_line_info|.
-  void SetTrailingDbgLineInfo(std::vector<Instruction>&& dbg_line_info) {
+  void SetTrailingDbgLineInfo(std::vector<std::unique_ptr<Instruction>>&& dbg_line_info) {
     trailing_dbg_line_info_ = std::move(dbg_line_info);
   }
 
-  std::vector<Instruction>& trailing_dbg_line_info() {
+  std::vector<std::unique_ptr<Instruction>>& trailing_dbg_line_info() {
     return trailing_dbg_line_info_;
   }
 
-  const std::vector<Instruction>& trailing_dbg_line_info() const {
+  const std::vector<std::unique_ptr<Instruction>>& trailing_dbg_line_info() const {
     return trailing_dbg_line_info_;
   }
 
@@ -318,7 +318,7 @@ class Module {
 
   // If the module ends with Op*Line instruction, they will not be attached to
   // any instruction.  We record them here, so they will not be lost.
-  std::vector<Instruction> trailing_dbg_line_info_;
+  std::vector<std::unique_ptr<Instruction>> trailing_dbg_line_info_;
 
   // This module contains DebugScope/DebugNoScope or OpLine/OpNoLine.
   bool contains_debug_info_;

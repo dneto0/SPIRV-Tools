@@ -81,7 +81,7 @@ class IrLoader {
   // The current BasicBlock under construction.
   std::unique_ptr<BasicBlock> block_;
   // Line related debug instructions accumulated thus far.
-  std::vector<Instruction> dbg_line_info_;
+  std::vector<std::unique_ptr<Instruction>> dbg_line_info_;
   // If doing extra line tracking, this is the line instruction that should be
   // applied to the next instruction.  Otherwise it always contains null.
   std::unique_ptr<Instruction> last_line_inst_;
