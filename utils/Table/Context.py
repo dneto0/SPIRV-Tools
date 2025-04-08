@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from typing import *
-from IndexRange import *
+from . IndexRange import *
 
 class Context():
     """

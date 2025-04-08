@@ -14,11 +14,11 @@
 # limitations under the License.
 
 import unittest
-from Context import Context
-from IndexRange import *
+from . Context import Context
+from . IndexRange import IndexRange
 
 class TestContext(unittest.TestCase):
-  def test_creation(self: object) -> None:
+  def test_creation(self) -> None:
     x = Context()
     self.assertIsInstance(x.string_total_len, int)
     self.assertIsInstance(x.string_buffer, list)
@@ -27,7 +27,7 @@ class TestContext(unittest.TestCase):
     self.assertEqual(x.string_buffer, [])
     self.assertEqual(x.strings, {})
 
-  def test_AddString_new(self: object) -> None:
+  def test_AddString_new(self) -> None:
     x = Context()
     abc_ir = x.AddString("abc")
     self.assertEqual(abc_ir, IndexRange(0,4))
@@ -47,7 +47,7 @@ class TestContext(unittest.TestCase):
     self.assertEqual(x.string_buffer, ["abc", "qz", ""])
     self.assertEqual(x.strings, {"abc": IndexRange(0,4), "qz": IndexRange(4,7), "": IndexRange(7,8)})
 
-  def test_AddString_idempotent(self: object) -> None:
+  def test_AddString_idempotent(self) -> None:
     x = Context()
     abc_ir = x.AddString("abc")
     self.assertEqual(abc_ir, IndexRange(0,4))

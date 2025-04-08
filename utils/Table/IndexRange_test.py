@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import unittest
-from IndexRange import IndexRange
+from . IndexRange import IndexRange
 
 class TestIndexRange(unittest.TestCase):
   def test_creation(self) -> None:
