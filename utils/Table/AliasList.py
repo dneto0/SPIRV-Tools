@@ -21,4 +21,4 @@ class AliasList(list):
     super().__init__(spans)
 
   def __hash__(self) -> int:
-    return functools.reduce(lambda h, ir: (3*h) + ir.__hash__() + 1, self, 0)
+    return functools.reduce(lambda h, ir: hash((h, hash(ir))), self, 0)
