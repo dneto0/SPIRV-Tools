@@ -17,7 +17,64 @@
 
 #include "source/extensions.h"
 #include "source/latest_version_spirv_header.h"
+#include "source/util/index_range.h"
 #include "spirv-tools/libspirv.hpp"
+
+// Define the static tables that describe the grammatical structure
+// of SPIR-V instructions and their operands. These tables are populated
+// by reading the grammar files from SPIRV-Headers.
+//
+// Most clients access these tables indirectly via an spv_context_t object.
+//
+// It should be very fast, and require no memory allocations, to create
+// an spv_context_t object.
+// It should be very fast for the system loader to load (and possibly relocate)
+// the tables.  In particular, there should be very few global symbols with
+// independent addresses. Prefer a very few large tables of items rather than
+// dozens or hundreds of global symbols.
+//
+// The overall structure among containers (i.e. skipping scalar data members)
+// is as follows:
+//
+//    An spv_context_t:
+//      - points to spv_opcode_table_t = array of spv_opcode_desc_t
+//      - points to spv_operand_table_t = array of spv_operand_desc_group_t
+//      - points to spv_ext_inst_table_t  = array of spv_ext_inst_group_t
+//
+//    An spv_opcode_desc_t has:
+//      - a name string
+//      - array of alias strings
+//      - array of spv::Capability      (an enum)
+//      - array of spv_operand_type_t   (an enum)
+//      - array of spvtools::Extension  (an enum)
+//
+//    An spv_operand_desc_group_t has:
+//      - array of spv_operand_desc_t:
+//
+//    An spv_operand_desc_t has:
+//      - a name string
+//      - array of alias strings
+//      - array of spv::Capability
+//      - array of spvtools::Extension
+//      - array of spv_operand_type_t
+//
+//    An spv_ext_inst_group_t has:
+//      - array of spv_ext_inst_desc_t
+//
+//    An spv_ext_inst_desc_t has:
+//      - a name string
+//      - array of spv::Capability
+//      - array of spv_operand_type_t
+//
+// The arrays are represented by spans into a global static array, with one
+// array for each of:
+//      - null-terminated strings, for names
+//      - arrays of null-terminated strings, for alias lists
+//      - spv_operand_type_t
+//      - spv::Capability
+//      - spvtools::Extension
+//
+// Note: Currently alias lists never have more than one element.
 
 typedef struct spv_opcode_desc_t {
   const char* name;
