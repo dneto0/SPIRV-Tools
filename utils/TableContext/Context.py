@@ -12,27 +12,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Manages a tables derived from the SPIR-V grammar."""
+
+from typing import *
+from IndexRange import *
 
 class Context():
     """
     Contains global tables for strings, and arrays of enums of various kinds.
     """
-    def __init__(self):
-        self.string_total_len = 0
-        self.string_buffer = [] # ordered list of strings.
-        self.strings = {} # Key is string, value is IndexRange
+    def __init__(self) -> None:
+        self.string_total_len: int = 0
+        self.string_buffer: list[str] = []
+        self.strings: dict[str, IndexRange] = {}
 
-    def AddString(self, s):
+    def AddString(self, s: str) -> IndexRange:
         """
-        Ensures string s is in the string buffer.
+        Ensures string s is in the string buffer, adding it if absent.
+        Returns its IndexRange.
         """
         if s in self.strings:
             return self.strings[s]
         # Allocate space, including for the terminating null.
-        s_space = len(s) + 1
+        s_space: int = len(s) + 1
         ir = IndexRange(self.string_total_len, self.string_total_len + s_space)
         self.strings[s] = ir
         self.string_total_len += s_space
-        self.string_buffer.push(s)
+        self.string_buffer.append(s)
         return ir

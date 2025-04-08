@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any
 
 class IndexRange():
   def __init__(self, first: int, count: int) -> None:
@@ -22,3 +23,6 @@ class IndexRange():
       raise Exception("invalid arg: first {} must be non-negative".format(first))
     if count < 0:
       raise Exception("invalid arg: count {} must be non-negative".format(count))
+
+  def __eq__(self, other: Any) -> bool:
+    return isinstance(other, IndexRange) and self.first == other.first and self.count == other.count

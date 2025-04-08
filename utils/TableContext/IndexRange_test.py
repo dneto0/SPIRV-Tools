@@ -34,5 +34,10 @@ class TestIndexRange(unittest.TestCase):
     self.assertNotEqual(x.first, y.first)
     self.assertNotEqual(x.count, y.count)
 
+  def test_equality(self) -> None:
+    self.assertEqual(IndexRange(4,5), IndexRange(4,5))
+    self.assertNotEqual(IndexRange(4,5), IndexRange(4,7))
+    self.assertNotEqual(IndexRange(7,5), IndexRange(4,5))
+
 if __name__ == "__main__":
     unittest.main()
