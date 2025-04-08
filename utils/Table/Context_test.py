@@ -16,8 +16,9 @@
 import unittest
 from . Context import Context
 from . IndexRange import IndexRange
+from . AliasList import AliasList
 
-class TestContext(unittest.TestCase):
+class TestCreate(unittest.TestCase):
   def test_creation(self) -> None:
     x = Context()
     self.assertIsInstance(x.string_total_len, int)
@@ -27,6 +28,7 @@ class TestContext(unittest.TestCase):
     self.assertEqual(x.string_buffer, [])
     self.assertEqual(x.strings, {})
 
+class TestString(unittest.TestCase):
   def test_AddString_new(self) -> None:
     x = Context()
     abc_ir = x.AddString("abc")
@@ -61,6 +63,43 @@ class TestContext(unittest.TestCase):
     self.assertEqual(x.string_buffer, ["abc"])
     self.assertEqual(x.strings, {"abc": IndexRange(0,4)})
 
+class TestAliases(unittest.TestCase):
+  def test_AddAliaseStringList_empty(self) -> None:
+    x = Context()
+    x_ir = x.AddAliasStringList([])
+    self.assertEqual(x_ir, IndexRange(0,0))
+    self.assertEqual(x.string_buffer, [])
+    self.assertEqual(x.alias_buffer, [])
+    self.assertEqual(x.alias_buffer, [])
+    self.assertEqual(x.aliases, {AliasList([]): IndexRange(0,0)})
+
+  def test_AddAliasStringList_nonempty_sorts(self) -> None:
+    x = Context()
+    a_ir = x.AddString("abc")
+    b_ir = x.AddString("def")
+    x_ir = x.AddAliasStringList(["def", "abc"])
+    y_ir = x.AddAliasStringList(["abc", "def"])
+
+    self.assertEqual(x_ir, IndexRange(0,2))
+    self.assertEqual(y_ir, IndexRange(0,2))
+    self.assertEqual(x.alias_buffer, [a_ir, b_ir])
+    al = AliasList([a_ir, b_ir])
+    self.assertEqual(x.aliases, {al: IndexRange(0,2)})
+
+  def test_AddAliasStringList_nonempty_twice(self) -> None:
+    x = Context()
+    a_ir = x.AddString("abc")
+    b_ir = x.AddString("def")
+    c_ir = x.AddString("ghi")
+    x_ir = x.AddAliasStringList(["abc", "def"])
+    y_ir = x.AddAliasStringList(["abc", "ghi"])
+
+    self.assertEqual(x_ir, IndexRange(0,2))
+    self.assertEqual(y_ir, IndexRange(2,2))
+    self.assertEqual(x.alias_buffer, [a_ir, b_ir, a_ir, c_ir])
+    abl = AliasList([a_ir, b_ir])
+    acl = AliasList([a_ir, c_ir])
+    self.assertEqual(x.aliases, {abl: IndexRange(0,2), acl: IndexRange(2,2)})
 
 if __name__ == "__main__":
     unittest.main()

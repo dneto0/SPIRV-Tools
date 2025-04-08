@@ -13,19 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
+import functools
+from . IndexRange import IndexRange
 
-class IndexRange():
-  def __init__(self, first: int, count: int) -> None:
-    self.first = first
-    self.count = count
-    if first < 0:
-      raise Exception("invalid arg: first {} must be non-negative".format(first))
-    if count < 0:
-      raise Exception("invalid arg: count {} must be non-negative".format(count))
+class AliasList(list):
+  def __init__(self, spans: list[IndexRange]):
+    super().__init__(spans)
 
-  def __eq__(self, other: Any) -> bool:
-    return isinstance(other, IndexRange) and self.first == other.first and self.count == other.count
-
-  def __hash__(self) -> bool:
-    return hash("{} {}".format(self.first, self.count))
+  def __hash__(self) -> int:
+    return functools.reduce(lambda h, ir: (3*h) + ir.__hash__() + 1, self, 0)

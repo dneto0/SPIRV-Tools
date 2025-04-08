@@ -39,5 +39,12 @@ class TestIndexRange(unittest.TestCase):
     self.assertNotEqual(IndexRange(4,5), IndexRange(4,7))
     self.assertNotEqual(IndexRange(7,5), IndexRange(4,5))
 
+  def test_hash_heuristic(self) -> None:
+    x = hash(IndexRange(4,5))
+    y = hash(IndexRange(4,5))
+    z = hash(IndexRange(6,7))
+    self.assertEqual(x, y)
+    self.assertNotEqual(x, z)
+
 if __name__ == "__main__":
     unittest.main()

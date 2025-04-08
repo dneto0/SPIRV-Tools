@@ -15,6 +15,7 @@
 
 from typing import *
 from . IndexRange import *
+from . AliasList import *
 
 class Context():
     """
@@ -25,9 +26,14 @@ class Context():
         self.string_buffer: list[str] = []
         self.strings: dict[str, IndexRange] = {}
 
+        # The concatenation of all alias lists.
+        self.alias_buffer: list[IndexRange] = []
+        # Maps an alias list to the subrange in self.aliasBuffer
+        self.aliases: dict[AliasList, IndexRange] = {}
+
     def AddString(self, s: str) -> IndexRange:
         """
-        Ensures string s is in the string buffer, adding it if absent.
+        Ensures string s is in the string table, adding it if absent.
         Returns its IndexRange.
         """
         if s in self.strings:
@@ -38,4 +44,20 @@ class Context():
         self.strings[s] = ir
         self.string_total_len += s_space
         self.string_buffer.append(s)
+        return ir
+
+    def AddAliasStringList(self, aliases: list[str]) -> IndexRange:
+        """
+        Ensures a list of strings exists in the alias table.
+        Lists are first sorted before comparison or storage.
+        A list is is represented as a list of IndexRange into the string table.
+        Returns the IndexRange for the list itself.
+        """
+        l = AliasList([self.AddString(a) for a in sorted(aliases)])
+        if l in self.aliases:
+            return self.aliases[l]
+        # Allocate space, including for the terminating null.
+        ir = IndexRange(len(self.alias_buffer), len(l))
+        self.alias_buffer.extend(l)
+        self.aliases[l] = ir
         return ir
