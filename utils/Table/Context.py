@@ -14,8 +14,15 @@
 # limitations under the License.
 
 from typing import *
+from enum import IntEnum
 from . IndexRange import *
 from . AliasList import *
+from . WordList import *
+
+class EnumKind(IntEnum):
+    Capability = 1
+    OperandType = 2
+    Extension = 3
 
 class Context():
     """
@@ -30,6 +37,14 @@ class Context():
         self.alias_buffer: list[IndexRange] = []
         # Maps an alias list to the subrange in self.aliasBuffer
         self.aliases: dict[AliasList, IndexRange] = {}
+
+        self.enum_buffer: dict[EnumKind,list[int]] = {}
+        self.enum_buffer[EnumKind.Capability] = []
+        self.enum_buffer[EnumKind.OperandType] = []
+        self.enum_buffer[EnumKind.Extension] = []
+        self.enums: dict[EnumKind, dict[WordList, IndexRange]] = {}
+        for k in EnumKind:
+          self.enums[k] = {}
 
     def AddString(self, s: str) -> IndexRange:
         """
@@ -61,3 +76,19 @@ class Context():
         self.alias_buffer.extend(l)
         self.aliases[l] = ir
         return ir
+
+    def AddEnumList(self, kind: EnumKind, words: list[int]) -> IndexRange:
+        """
+        Ensures an ordered list of 32-bit integers (words) exists in the word table
+        for the given enum kind.
+        Returns the IndexRange for the list itself.
+        """
+        l = WordList(words)
+        if l in self.enums[kind]:
+             return self.enums[kind]
+        ir = IndexRange(len(self.enum_buffer[kind]), len(l))
+        self.enum_buffer[kind].extend(l)
+        self.enums[kind][l] = ir
+        return ir
+
+
