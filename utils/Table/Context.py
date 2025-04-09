@@ -13,16 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import *
+#from typing import *
 from enum import IntEnum
 from . IndexRange import *
 from . AliasList import *
 from . WordList import *
 
+
 class EnumKind(IntEnum):
     Capability = 1
     OperandType = 2
     Extension = 3
+
 
 class Context():
     """
@@ -85,10 +87,8 @@ class Context():
         """
         l = WordList(words)
         if l in self.enums[kind]:
-             return self.enums[kind]
+            return self.enums[kind][l]
         ir = IndexRange(len(self.enum_buffer[kind]), len(l))
         self.enum_buffer[kind].extend(l)
         self.enums[kind][l] = ir
         return ir
-
-

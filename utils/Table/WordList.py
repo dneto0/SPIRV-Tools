@@ -16,6 +16,7 @@
 import functools
 from . IndexRange import IndexRange
 
+
 class WordList(list):
   def __init__(self, words: list[int]):
     for w in words:
@@ -23,5 +24,5 @@ class WordList(list):
         raise Exception("expected 32-bit unsigned word, got {}".format(w))
     super().__init__(words)
 
-  def __hash__(self) -> int:
+  def __hash__(self) -> int: # type: ignore[override]
     return functools.reduce(lambda h, word: hash((h, word)), self, 0)

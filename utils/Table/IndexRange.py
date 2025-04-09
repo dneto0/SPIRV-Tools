@@ -27,5 +27,5 @@ class IndexRange():
   def __eq__(self, other: Any) -> bool:
     return isinstance(other, IndexRange) and self.first == other.first and self.count == other.count
 
-  def __hash__(self) -> bool:
+  def __hash__(self) -> int:
     return hash("{} {}".format(self.first, self.count))

@@ -148,9 +148,9 @@ class TestEnums(unittest.TestCase):
       for k in EnumKind:
           c = Context()
           c.AddEnumList(k, [(1<<32)-1])
-          self.assertRaises(Exception, c.AddEnumList([-1]))
-          self.assertRaises(Exception, c.AddEnumList([1.5]))
-          self.assertRaises(Exception, c.AddEnumList([1<<32]))
+          self.assertRaises(Exception, c.AddEnumList(k, [-1]))
+          self.assertRaises(Exception, c.AddEnumList(k, [1.5])) # type: ignore[list-item]
+          self.assertRaises(Exception, c.AddEnumList(k, [1<<32]))
 
 if __name__ == "__main__":
     unittest.main()

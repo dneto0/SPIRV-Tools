@@ -16,9 +16,10 @@
 import functools
 from . IndexRange import IndexRange
 
+
 class AliasList(list):
   def __init__(self, spans: list[IndexRange]):
     super().__init__(spans)
 
-  def __hash__(self) -> int:
+  def __hash__(self) -> int: # type: ignore[override]
     return functools.reduce(lambda h, ir: hash((h, hash(ir))), self, 0)
