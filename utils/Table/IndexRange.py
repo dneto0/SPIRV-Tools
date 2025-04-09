@@ -29,3 +29,6 @@ class IndexRange():
 
   def __hash__(self) -> int:
     return hash("{} {}".format(self.first, self.count))
+
+  def __str__(self) -> str:
+    return "IR({}, {})".format(self.first, self.count)

@@ -92,3 +92,11 @@ class Context():
         self.enum_buffer[kind].extend(l)
         self.enums[kind][l] = ir
         return ir
+
+    def dump(self) -> None:
+        print("string_total_len: {}".format(self.string_total_len))
+        print("string_buffer: {}".format(self.string_buffer))
+        s = []
+        for k,v in self.strings.items():
+            s.append("'{}': {}".format(k,str(v)))
+        print("strings: {}".format('\n'.join(s)))
