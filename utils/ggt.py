@@ -138,10 +138,10 @@ class Grammar():
     and enum tables.
     Assumes an index range is emitted by printing an IndexRange object.
     """
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, extensions: list[str], operand_kinds:list[dict]) -> None:
         self.context = Context.Context()
-        self.extensions: list[str] = kwargs.get('extensions',[])
-        self.operand_kinds: list[str] = kwargs.get('operand_kinds',[])
+        self.extensions = extensions
+        self.operand_kinds = operand_kinds
         if len(self.extensions) == 0:
             raise Exception("operand_kinds should be a non-empty list")
         if len(self.extensions) == 0:
@@ -150,11 +150,6 @@ class Grammar():
         self.extension_index: dict[str, int] = {}
         for e in self.extensions:
             self.extension_index[e] = len(self.extension_index)
-
-        # Populate string table
-        for e in self.extensions:
-            #self.context.AddString(e)
-            pass
 
     def ExtensionEnumList(self) -> str:
         """Returns enumeration containing extensions declared in the grammar."""
@@ -195,6 +190,44 @@ class Grammar():
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
         return '\n'.join(lines)
 
+    def OperandDescriptions(self) -> str:
+        """
+        Returns the string for the body of the table for operand types.
+        """
+        lines: list[str] = []
+        for ok in self.operands_kinds:
+            parts: list[str] = []
+
+            opname: str = inst['opname']
+
+            operands: list[dict] = inst.get('operands',[])
+            operand_kinds = [convert_operand_kind(o) for o in operands]
+            hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
+            hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
+
+            parts.extend([
+                self.context.AddString(ok.get(kj
+
+"""
+  const char* name;
+  const uint32_t value;
+  const uint32_t numAliases;
+  const char** aliases;
+  const uint32_t numCapabilities;
+  const spv::Capability* capabilities;
+  // A set of extensions that enable this feature. If empty then this operand
+  // value is in core and its availability is subject to minVersion. The
+  // assembler, binary parser, and disassembler ignore this rule, so you can
+  // freely process invalid modules.
+  const uint32_t numExtensions;
+  const spvtools::Extension* extensions;
+  const spv_operand_type_t operandTypes[16];  // TODO: Smaller/larger?
+  // Minimal core SPIR-V version required for this feature, if without
+  // extensions. ~0u means reserved for future use. ~0u and non-empty extension
+  // lists means only available in extensions.
+  const uint32_t minVersion;
+  const uint32_t lastVersion;
+"""
 
 
 def make_path_to_file(f: str) -> None:
@@ -1035,7 +1068,7 @@ def main():
                     extensions = get_extension_list(instructions, operand_kinds)
                     operand_kinds = precondition_operand_kinds(operand_kinds)
 
-        g = Grammar(extensions = extensions, operand_kinds = operand_kinds)
+        g = Grammar(extensions, operand_kinds)
 
 
         print(g.InstructionTableBody(core_grammar['instructions']))

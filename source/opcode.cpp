@@ -30,10 +30,6 @@
 #include "spirv-tools/libspirv.h"
 
 namespace {
-struct OpcodeDescPtrLen {
-  const spv_opcode_desc_t* ptr;
-  uint32_t len;
-};
 
 #include "core.insts-unified1.inc"
 
