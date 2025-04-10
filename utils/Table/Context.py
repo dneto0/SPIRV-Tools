@@ -113,3 +113,11 @@ class Context():
             l.append(" {} -> {},".format([str(x) for x in ak], str(av)))
         print("aliases: {}".format('\n'.join(l)))
 
+        for ek in EnumKind:
+            print("\nenum_buffer[{}]: {}".format(str(ek), [str(x) for x in self.enum_buffer[ek]]))
+            l = []
+            for key,val in self.enums[ek].items():
+                l.append(" {} -> {},".format([str(x) for x in key], str(val)))
+            print("enums[{}]: {}".format(str(ek),'\n'.join(l)))
+
+

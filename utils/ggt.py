@@ -59,8 +59,75 @@ def convert_max_required_version(version: str | None) -> str:
         return '0xffffffffu'
     return 'SPV_SPIRV_VERSION_WORD({})'.format(version.replace('.', ','))
 
+
 def c_bool(b: bool) -> str:
     return 'true' if b else 'false'
+
+
+def convert_operand_kind(obj: dict[str, str]) -> str:
+    """Returns the corresponding operand type used in spirv-tools for the given
+    operand kind and quantifier used in the JSON grammar.
+
+    Arguments:
+      - obj: an instruction operand, having keys:
+          - 'kind', e.g. 'IdRef'
+          - optionally, a quantifier: '?' or '*'
+
+    Returns:
+      a string of the enumerant name in spv_operand_type_t
+    """
+    kind = obj.get('kind', '')
+    quantifier = obj.get('quantifier', '')
+    if kind == '':
+        raise Error("operand JSON object missing a 'kind' field")
+    # The following cases are where we differ between the JSON grammar and
+    # spirv-tools.
+    if kind == 'IdResultType':
+        kind = 'TypeId'
+    elif kind == 'IdResult':
+        kind = 'ResultId'
+    elif kind == 'IdMemorySemantics' or kind == 'MemorySemantics':
+        kind = 'MemorySemanticsId'
+    elif kind == 'IdScope' or kind == 'Scope':
+        kind = 'ScopeId'
+    elif kind == 'IdRef':
+        kind = 'Id'
+
+    elif kind == 'ImageOperands':
+        kind = 'Image'
+    elif kind == 'Dim':
+        kind = 'Dimensionality'
+    elif kind == 'ImageFormat':
+        kind = 'SamplerImageFormat'
+    elif kind == 'KernelEnqueueFlags':
+        kind = 'KernelEnqFlags'
+
+    elif kind == 'LiteralExtInstInteger':
+        kind = 'ExtensionInstructionNumber'
+    elif kind == 'LiteralSpecConstantOpInteger':
+        kind = 'SpecConstantOpNumber'
+    elif kind == 'LiteralContextDependentNumber':
+        kind = 'TypedLiteralNumber'
+
+    elif kind == 'PairLiteralIntegerIdRef':
+        kind = 'LiteralIntegerId'
+    elif kind == 'PairIdRefLiteralInteger':
+        kind = 'IdLiteralInteger'
+    elif kind == 'PairIdRefIdRef':  # Used by OpPhi in the grammar
+        kind = 'Id'
+
+    if kind == 'FPRoundingMode':
+        kind = 'FpRoundingMode'
+    elif kind == 'FPFastMathMode':
+        kind = 'FpFastMathMode'
+
+    if quantifier == '?':
+        kind = 'Optional{}'.format(kind)
+    elif quantifier == '*':
+        kind = 'Variable{}'.format(kind)
+
+    return 'SPV_OPERAND_TYPE_{}'.format(
+        re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
 
 class Grammar():
@@ -86,9 +153,10 @@ class Grammar():
 
         # Populate string table
         for e in self.extensions:
-            self.context.AddString(e)
+            #self.context.AddString(e)
+            pass
 
-    def ExtensionEnumNameList(self) -> str:
+    def ExtensionEnumList(self) -> str:
         """Returns enumeration containing extensions declared in the grammar."""
         return ',\n'.join(['k' + e for e in self.extensions])
 
@@ -106,19 +174,19 @@ class Grammar():
             opname: str = inst['opname']
 
             operands: list[dict] = inst.get('operands',[])
-            operand_kinds = [o.get('kind') for o in operands]
-            hasResult = 'IdResult' in operand_kinds
-            hasType = 'IdResultType' in operand_kinds
+            operand_kinds = [convert_operand_kind(o) for o in operands]
+            hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
+            hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
 
             parts.extend([
-                self.context.AddString(opname),
+                self.context.AddString(opname[2:]),
                 'spv::Op::' + opname,
                 self.context.AddAliasStringList(inst.get('aliases',[])),
-                # capabilities
-                # operand types
+                self.context.AddEnumList(Context.EnumKind.Capability, inst.get('capabilities',[])),
+                self.context.AddEnumList(Context.EnumKind.OperandType, operand_kinds),
                 c_bool(hasResult),
                 c_bool(hasType),
-                # extensions
+                self.context.AddEnumList(Context.EnumKind.Extension, inst.get('extensions',[])),
                 convert_min_required_version(inst.get('version', None)),
                 convert_max_required_version(inst.get('lastVersion', None)),
             ])
@@ -126,9 +194,6 @@ class Grammar():
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
         return '\n'.join(lines)
-
-
-
 
 
 
@@ -274,67 +339,6 @@ def generate_extension_arrays(extensions):
     return '\n'.join(arrays)
 
 
-def convert_operand_kind(operand_tuple):
-    """Returns the corresponding operand type used in spirv-tools for the given
-    operand kind and quantifier used in the JSON grammar.
-
-    Arguments:
-      - operand_tuple: a tuple of two elements:
-          - operand kind: used in the JSON grammar
-          - quantifier: '', '?', or '*'
-
-    Returns:
-      a string of the enumerant name in spv_operand_type_t
-    """
-    kind, quantifier = operand_tuple
-    # The following cases are where we differ between the JSON grammar and
-    # spirv-tools.
-    if kind == 'IdResultType':
-        kind = 'TypeId'
-    elif kind == 'IdResult':
-        kind = 'ResultId'
-    elif kind == 'IdMemorySemantics' or kind == 'MemorySemantics':
-        kind = 'MemorySemanticsId'
-    elif kind == 'IdScope' or kind == 'Scope':
-        kind = 'ScopeId'
-    elif kind == 'IdRef':
-        kind = 'Id'
-
-    elif kind == 'ImageOperands':
-        kind = 'Image'
-    elif kind == 'Dim':
-        kind = 'Dimensionality'
-    elif kind == 'ImageFormat':
-        kind = 'SamplerImageFormat'
-    elif kind == 'KernelEnqueueFlags':
-        kind = 'KernelEnqFlags'
-
-    elif kind == 'LiteralExtInstInteger':
-        kind = 'ExtensionInstructionNumber'
-    elif kind == 'LiteralSpecConstantOpInteger':
-        kind = 'SpecConstantOpNumber'
-    elif kind == 'LiteralContextDependentNumber':
-        kind = 'TypedLiteralNumber'
-
-    elif kind == 'PairLiteralIntegerIdRef':
-        kind = 'LiteralIntegerId'
-    elif kind == 'PairIdRefLiteralInteger':
-        kind = 'IdLiteralInteger'
-    elif kind == 'PairIdRefIdRef':  # Used by OpPhi in the grammar
-        kind = 'Id'
-
-    if kind == 'FPRoundingMode':
-        kind = 'FpRoundingMode'
-    elif kind == 'FPFastMathMode':
-        kind = 'FpFastMathMode'
-
-    if quantifier == '?':
-        kind = 'Optional{}'.format(kind)
-    elif quantifier == '*':
-        kind = 'Variable{}'.format(kind)
-
-    return 'SPV_OPERAND_TYPE_{}'.format(
-        re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
 
 class InstInitializer(object):
@@ -362,7 +366,7 @@ class InstInitializer(object):
         self.caps_mask = get_capability_array_name(caps)
         self.num_exts = len(exts)
         self.exts = get_extension_array_name(exts)
-        self.operands = [convert_operand_kind(o) for o in operands]
+        self.operands = [convert_operand_kind_old(o) for o in operands]
 
         self.fix_syntax()
 
@@ -431,7 +435,7 @@ class ExtInstInitializer(object):
         self.opcode = opcode
         self.num_caps = len(caps)
         self.caps_mask = get_capability_array_name(caps)
-        self.operands = [convert_operand_kind(o) for o in operands]
+        self.operands = [convert_operand_kind_old(o) for o in operands]
         self.operands.append('SPV_OPERAND_TYPE_NONE')
 
     def __str__(self):
@@ -575,7 +579,7 @@ class EnumerantInitializer(object):
         self.caps = get_capability_array_name(caps)
         self.num_exts = len(exts)
         self.exts = get_extension_array_name(exts)
-        self.parameters = [convert_operand_kind(p) for p in parameters]
+        self.parameters = [convert_operand_kind_old(p) for p in parameters]
         self.version = convert_min_required_version(version)
         self.lastVersion = convert_max_required_version(lastVersion)
 
@@ -716,7 +720,7 @@ def generate_operand_kind_table(enums):
     enum_quantifiers = [''] * (len(enums) - len(optional_enums)) + ['?'] * len(optional_enums)
     # And we don't want redefinition of them.
     enum_entries = enum_entries[:-len(optional_enums)]
-    enum_kinds = [convert_operand_kind(e)
+    enum_kinds = [convert_operand_kind_old(e)
                   for e in zip(enum_kinds, enum_quantifiers)]
     table_entries = zip(enum_kinds, enum_names, enum_names)
     table_entries = ['  {{{}, ARRAY_SIZE({}), {}}}'.format(*e)
@@ -1036,8 +1040,7 @@ def main():
 
         print(g.InstructionTableBody(core_grammar['instructions']))
         print("")
-
-        g.context.dump()
+        print(g.ExtensionEnumList())
 
         sys.exit(0)
         if args.core_insts_output is not None:
