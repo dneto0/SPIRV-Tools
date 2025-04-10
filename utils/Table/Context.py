@@ -121,16 +121,29 @@ class Context():
 
     def dump(self) -> None:
         print("string_total_len: {}".format(self.string_total_len))
-        print("string_buffer: {}".format(self.string_buffer))
+
+        sbi = 0
+        print("string_buffer:")
+        for sb in self.string_buffer:
+            print("  {}: '{}'".format(sbi, sb))
+            sbi += len(sb) + 1
+        print("")
+
         s = []
         for k,v in self.strings.items():
             s.append("'{}': {}".format(k,str(v)))
         print("strings:\n  {}\n".format('\n  '.join(s)))
 
-        print("range_buffer:\n  {}\n".format('\n  '.join([str(x) for x in self.range_buffer])))
+        print("range_buffer:")
+        i: int = 0
+        for r in self.range_buffer:
+            print("{}: {}".format(i, str(r)))
+            i += 1
+        print("")
 
         for rk, rv in self.ranges.items():
             for key,val in rv.items():
                 print("ranges[{}][{}]: {}".format(str(rk),str(key), str(val)))
+        print("")
 
 
