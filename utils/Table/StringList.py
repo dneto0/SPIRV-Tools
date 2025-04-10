@@ -14,12 +14,14 @@
 # limitations under the License.
 
 import functools
-from . IndexRange import IndexRange
-
 
 class StringList(list):
-  def __init__(self, strs: list[str]) -> None:
-    super().__init__(strs)
+    """
+    A hashable ordered list of strings.
+    This can be used as the key for a dictionary.
+    """
+    def __init__(self, strs: list[str]) -> None:
+        super().__init__(strs)
 
-  def __hash__(self) -> int: # type: ignore[override]
-    return functools.reduce(lambda h, ir: hash((h, hash(ir))), self, 0)
+    def __hash__(self) -> int: # type: ignore[override]
+        return functools.reduce(lambda h, ir: hash((h, hash(ir))), self, 0)

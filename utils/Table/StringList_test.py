@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-from . Context import *
 from . StringList import *
 
 class TestStringList(unittest.TestCase):
@@ -42,7 +41,6 @@ class TestStringList(unittest.TestCase):
     self.assertNotEqual(x, z)
 
   def test_hash_heuristic(self) -> None:
-    c = Context()
     x = StringList(["abc", "def"])
     y = StringList(["abc", "def"])
     z = StringList(["abc", "df"])

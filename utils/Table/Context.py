@@ -21,42 +21,71 @@ from . WordList import *
 from . StringList import *
 
 
-class EnumKind(IntEnum):
-    Capability = 1
-    OperandType = 2
-    Extension = 3
-
-
 class Context():
     """
-    Contains global tables for strings, and arrays of enums of various kinds.
+    Contains global tables for strings, and lists-of-strings.
+    It contains:
+
+        - string_buffer: A list of null-terminated strings. The list is
+          partitioned into contiguous segments dedicated to a specific
+          kind of string, e.g.:
+            - all instruction opcodes
+            - all extension names
+            - all aliases for a given enum
+            - all enum names for a first operand type
+            - all enum names for a second operand type, etc.
+          Strings are sorted within each segment.
+
+        - string_total_len: The sum of lengths of strings in string_buffer.
+
+        - strings: Maps a string to an IndexRange indicating where the string
+          can be found in the (future) concatenation of all strings in the
+          string_buffer.
+
+        - range_buffer: A list of IndexRange objects. Each R is one of:
+
+            - An index range referencing one string as it appears in the
+              (future) concatenation of all strings in the string_buffer.
+              In this case R represents a single string.
+
+            - An index range referencing earlier elements in range_buffer
+              itself.  In this case R represents a list of strings.
+
+        - ranges:  An associative container mapping a kind and lists-of-strings
+            to its encoding in the range_buffer array.
+
+            It is a two-level mapping of Python type:
+
+                dict[str,dict[StringList,IndexRange]]
+
+            where
+
+                ranges[kind][list of strings] = an IndexRange
+
+            The 'kind' string encodes a purpose including:
+                - opcodes: the list of instruction opcode strings.
+                - the list of aliases for an opcode, or an enum
+                - an operand type such as 'SPV_OPERAND_TYPE_DIMENSIONALITY':
+                  the list of operand type names, e.g. '2D', '3D', 'Cube',
+                  'Rect', etc. in the case of SPV_OPERAND_TYPE_DIMENSIONALITY.
+
+            The IndexRange leaf value encodes a list of strings as in the
+            second case described for 'range_buffer'.
+
     """
     def __init__(self) -> None:
-        self.string_total_len: int = 0
+        self.string_total_len: int = 0  # Sum of  lengths of all strings in string_buffer
         self.string_buffer: list[str] = []
         self.strings: dict[str, IndexRange] = {}
 
-        # The concatenation of all alias lists.
-        self.alias_buffer: list[IndexRange] = []
-        # Maps an alias list to the subrange in self.aliasBuffer
-        self.aliases: dict[AliasList, IndexRange] = {}
-
-        # A mapping from an enum kind to a superlist of enumerant names
-        # for that enum kind. Every list of enumerants from the grammar
-        # file is a substring of the superlist.
-        self.enum_buffer: dict[EnumKind,list[str]] = {}
-        self.enum_buffer[EnumKind.Capability] = []
-        self.enum_buffer[EnumKind.OperandType] = []
-        self.enum_buffer[EnumKind.Extension] = []
-        # For each enum kind, maps a list of enumerant names to
-        # the subrange of the enum_buffer for that enum kind.
-        self.enums: dict[EnumKind, dict[StringList, IndexRange]] = {}
-        for k in EnumKind:
-          self.enums[k] = {}
+        self.range_buffer: list[IndexRange] = []
+        # We need StringList here because it's hashable, and so it
+        # can be used as the key for a dict.
+        self.ranges: dict[str,dict[StringList,IndexRange]] = {}
 
     def AddString(self, s: str) -> IndexRange:
         """
-        Ensures string s is in the string table, adding it if absent.
+        Adds or finds a string in the string_buffer.
         Returns its IndexRange.
         """
         if s in self.strings:
@@ -69,34 +98,25 @@ class Context():
         self.string_buffer.append(s)
         return ir
 
-    def AddAliasStringList(self, aliases: list[str]) -> IndexRange:
+    def AddStringList(self, kind: str, words: list[str]) -> IndexRange:
         """
-        Ensures a list of strings exists in the alias table.
-        Lists are first sorted before comparison or storage.
-        A list is is represented as a list of IndexRange into the string table.
-        Returns the IndexRange for the list itself.
-        """
-        l = AliasList([self.AddString(a) for a in sorted(aliases)])
-        if l in self.aliases:
-            return self.aliases[l]
-        # Allocate space, including for the terminating null.
-        ir = IndexRange(len(self.alias_buffer), len(l))
-        self.alias_buffer.extend(l)
-        self.aliases[l] = ir
-        return ir
-
-    def AddEnumList(self, kind: EnumKind, words: list[str]) -> IndexRange:
-        """
-        Ensures an ordered list enum names exists in the word table
-        for the given enum kind.
-        Returns the IndexRange for the list itself.
+        Ensures a list of strings is recorded in range_buffer, and
+        returns its location in the range_buffer.
+        As a side effect, also ensures each string in the list is in
+        the string_buffer.
         """
         l = StringList(words)
-        if l in self.enums[kind]:
-            return self.enums[kind][l]
-        ir = IndexRange(len(self.enum_buffer[kind]), len(l))
-        self.enum_buffer[kind].extend(l)
-        self.enums[kind][l] = ir
+
+        entry: dict[StringList, IndexRange] = self.ranges.get(kind, {})
+        if kind not in self.ranges:
+            self.ranges[kind] = entry
+
+        if l in entry:
+            return entry[l]
+        new_ranges = [self.AddString(s) for s in l]
+        ir = IndexRange(len(self.range_buffer), len(new_ranges))
+        self.range_buffer.extend(new_ranges)
+        entry[l] = ir
         return ir
 
     def dump(self) -> None:
@@ -105,19 +125,12 @@ class Context():
         s = []
         for k,v in self.strings.items():
             s.append("'{}': {}".format(k,str(v)))
-        print("strings: {}\n".format('\n'.join(s)))
+        print("strings:\n  {}\n".format('\n  '.join(s)))
 
-        print("alias_buffer: {}".format([str(x) for x in self.alias_buffer]))
-        l = []
-        for ak,av in self.aliases.items():
-            l.append(" {} -> {},".format([str(x) for x in ak], str(av)))
-        print("aliases: {}".format('\n'.join(l)))
+        print("range_buffer:\n  {}\n".format('\n  '.join([str(x) for x in self.range_buffer])))
 
-        for ek in EnumKind:
-            print("\nenum_buffer[{}]: {}".format(str(ek), [str(x) for x in self.enum_buffer[ek]]))
-            l = []
-            for key,val in self.enums[ek].items():
-                l.append(" {} -> {},".format([str(x) for x in key], str(val)))
-            print("enums[{}]: {}".format(str(ek),'\n'.join(l)))
+        for rk, rv in self.ranges.items():
+            for key,val in rv.items():
+                print("ranges[{}][{}]: {}".format(str(rk),str(key), str(val)))
 
 
