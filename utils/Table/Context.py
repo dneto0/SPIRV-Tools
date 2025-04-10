@@ -68,6 +68,8 @@ class Context():
                 - an operand type such as 'SPV_OPERAND_TYPE_DIMENSIONALITY':
                   the list of operand type names, e.g. '2D', '3D', 'Cube',
                   'Rect', etc. in the case of SPV_OPERAND_TYPE_DIMENSIONALITY.
+            By convention, the 'kind' string should be a singular noun for
+            the type of object named by each member of the list.
 
             The IndexRange leaf value encodes a list of strings as in the
             second case described for 'range_buffer'.

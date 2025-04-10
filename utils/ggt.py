@@ -129,6 +129,9 @@ def convert_operand_kind(obj: dict[str, str]) -> str:
     return 'SPV_OPERAND_TYPE_{}'.format(
         re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
+def ShouldEmit(operand_kind: dict[str,any]):
+    """ Returns true if we should emit a table for the given operand kind. """
+    return operand_kind.get('category') in ['ValueEnum', 'BitEnum']
 
 class Grammar():
     """
@@ -142,14 +145,20 @@ class Grammar():
         self.context = Context.Context()
         self.extensions = extensions
         self.operand_kinds = operand_kinds
-        if len(self.extensions) == 0:
+        if len(self.operand_kinds) == 0:
             raise Exception("operand_kinds should be a non-empty list")
         if len(self.extensions) == 0:
             raise Exception("extensions should be a non-empty list")
 
-        self.extension_index: dict[str, int] = {}
-        for e in self.extensions:
-            self.extension_index[e] = len(self.extension_index)
+        # Preload the string table
+        self.context.AddStringList('extension', extensions)
+
+        for ok in filter(ShouldEmit, operand_kinds):
+            enumerants = [e['enumerant'] for e in ok['enumerants']]
+            self.context.AddStringList('ok.'+ok['kind'], enumerants)
+
+    def dump(self) -> None:
+        self.context.dump()
 
     def ExtensionEnumList(self) -> str:
         """Returns enumeration containing extensions declared in the grammar."""
@@ -162,30 +171,32 @@ class Grammar():
         Params:
             insts: an array of instructions objects using the JSON schema
         """
+
+        # Preload the string list with opcodes, without the 'Op' prefix.
+        self.context.AddStringList('opcode', sorted([i['opname'][2:] for i in insts]))
+
         lines: list[str] = []
         for inst in insts:
             parts: list[str] = []
 
             opname: str = inst['opname']
 
-            operands: list[dict] = inst.get('operands',[])
-            operand_kinds = [convert_operand_kind(o) for o in operands]
-            hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
-            hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
+            operand_kinds = [o['kind'] for o in inst.get('operands',[])]
+            hasResult = 'IdResult' in operand_kinds
+            hasType = 'IdResultType' in operand_kinds
 
             parts.extend([
                 self.context.AddString(opname[2:]),
                 'spv::Op::' + opname,
-                self.context.AddAliasStringList(inst.get('aliases',[])),
-                self.context.AddEnumList(Context.EnumKind.Capability, inst.get('capabilities',[])),
-                self.context.AddEnumList(Context.EnumKind.OperandType, operand_kinds),
+                self.context.AddStringList('alias', inst.get('aliases',[])),
+                self.context.AddStringList('capability', inst.get('capabilities',[])),
+                self.context.AddStringList('operand', operand_kinds),
                 c_bool(hasResult),
                 c_bool(hasType),
-                self.context.AddEnumList(Context.EnumKind.Extension, inst.get('extensions',[])),
+                self.context.AddStringList('extension', inst.get('extensions',[])),
                 convert_min_required_version(inst.get('version', None)),
                 convert_max_required_version(inst.get('lastVersion', None)),
             ])
-            parts = [str(x) for x in parts]
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
         return '\n'.join(lines)
@@ -205,8 +216,6 @@ class Grammar():
             hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
             hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
 
-            parts.extend([
-                self.context.AddString(ok.get(kj
 
 """
   const char* name;
@@ -1072,8 +1081,9 @@ def main():
 
 
         print(g.InstructionTableBody(core_grammar['instructions']))
+
         print("")
-        print(g.ExtensionEnumList())
+        g.context.dump()
 
         sys.exit(0)
         if args.core_insts_output is not None:
