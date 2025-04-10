@@ -17,7 +17,7 @@ import unittest
 from . Context import Context, EnumKind
 from . IndexRange import IndexRange
 from . AliasList import AliasList
-from . WordList import WordList
+from . StringList import StringList
 
 class TestCreate(unittest.TestCase):
   def test_creation(self) -> None:
@@ -109,48 +109,41 @@ class TestEnums(unittest.TestCase):
         x_ir = c.AddEnumList(k, [])
         self.assertEqual(x_ir, IndexRange(0,0))
         self.assertEqual(c.enum_buffer[k], [])
-        self.assertEqual(c.enums[k], {WordList([]): IndexRange(0,0)})
+        self.assertEqual(c.enums[k], {StringList([]): IndexRange(0,0)})
 
   def test_AddEnumList_nonempty_does_not_sort(self) -> None:
     for k in EnumKind:
         c = Context()
-        x_ir = c.AddEnumList(k, [123,456])
-        y_ir = c.AddEnumList(k, [456,123])
+        x_ir = c.AddEnumList(k, ["abc","def"])
+        y_ir = c.AddEnumList(k, ["def","ghi"])
         self.assertEqual(x_ir, IndexRange(0,2))
         self.assertEqual(y_ir, IndexRange(2,2))
-        self.assertEqual(c.enum_buffer[k], [123, 456, 456, 123])
-        self.assertEqual(c.enums[k], { WordList([123,456]): x_ir, WordList([456, 123]): y_ir})
+        self.assertEqual(c.enum_buffer[k], ["abc", "def", "def", "ghi"])
+        self.assertEqual(c.enums[k], \
+            { StringList(["abc","def"]): x_ir, StringList(["def", "ghi"]): y_ir})
 
     def test_AddAliasStringList_idempotent(self) -> None:
       for k in EnumKind:
           c = Context()
-          x_ir = c.AddEnumList(k, [123,456])
-          y_ir = c.AddEnumList(k, [123,456])
+          x_ir = c.AddEnumList(k, ["abc","def"])
+          y_ir = c.AddEnumList(k, ["abc","def"])
           self.assertEqual(x_ir, IndexRange(0,2))
           self.assertEqual(y_ir, IndexRange(0,2))
-          self.assertEqual(c.enum_buffer[k], [123, 456])
-          self.assertEqual(c.enums, { WordList([123,456]): x_ir })
+          self.assertEqual(c.enum_buffer[k], ["abc", "def"])
+          self.assertEqual(c.enums, { StringList(["abc","def"]): x_ir })
 
     def test_AddEnumList_enum_kinds_disjoint(self) -> None:
       c = Context()
       i: int = 0
       for k in EnumKind:
           i += 1
-          x_ir = c.AddEnumList(k, [123,456 + i])
+          x_ir = c.AddEnumList(k, ["abc","def" + str(i)])
           self.assertEqual(x_ir, IndexRange(0,2))
-          self.assertEqual(c.enum_buffer[k], [123, 456 + i])
-          self.assertEqual(c.enums, { WordList([123,456 + i]): x_ir})
-      self.assertEqual(c.enum_buffer[EnumKind.Capability], [123, 457])
-      self.assertEqual(c.enum_buffer[EnumKind.OperandType], [123, 458])
-      self.assertEqual(c.enum_buffer[EnumKind.Extension], [123, 459])
-
-    def test_AddEnumList_value_check(self) -> None:
-      for k in EnumKind:
-          c = Context()
-          c.AddEnumList(k, [(1<<32)-1])
-          self.assertRaises(Exception, c.AddEnumList(k, [-1]))
-          self.assertRaises(Exception, c.AddEnumList(k, [1.5])) # type: ignore[list-item]
-          self.assertRaises(Exception, c.AddEnumList(k, [1<<32]))
+          self.assertEqual(c.enum_buffer[k], ["abc", "def" + str(i)])
+          self.assertEqual(c.enums, { StringList(["abc","def" + str(i)]): x_ir})
+      self.assertEqual(c.enum_buffer[EnumKind.Capability], ["abc", "def1"])
+      self.assertEqual(c.enum_buffer[EnumKind.OperandType], ["abc", "def2"])
+      self.assertEqual(c.enum_buffer[EnumKind.Extension], ["abc", "def3"])
 
 if __name__ == "__main__":
     unittest.main()

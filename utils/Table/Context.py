@@ -18,6 +18,7 @@ from enum import IntEnum
 from . IndexRange import *
 from . AliasList import *
 from . WordList import *
+from . StringList import *
 
 
 class EnumKind(IntEnum):
@@ -40,11 +41,16 @@ class Context():
         # Maps an alias list to the subrange in self.aliasBuffer
         self.aliases: dict[AliasList, IndexRange] = {}
 
-        self.enum_buffer: dict[EnumKind,list[int]] = {}
+        # A mapping from an enum kind to a superlist of enumerant names
+        # for that enum kind. Every list of enumerants from the grammar
+        # file is a substring of the superlist.
+        self.enum_buffer: dict[EnumKind,list[str]] = {}
         self.enum_buffer[EnumKind.Capability] = []
         self.enum_buffer[EnumKind.OperandType] = []
         self.enum_buffer[EnumKind.Extension] = []
-        self.enums: dict[EnumKind, dict[WordList, IndexRange]] = {}
+        # For each enum kind, maps a list of enumerant names to
+        # the subrange of the enum_buffer for that enum kind.
+        self.enums: dict[EnumKind, dict[StringList, IndexRange]] = {}
         for k in EnumKind:
           self.enums[k] = {}
 
@@ -73,20 +79,19 @@ class Context():
         l = AliasList([self.AddString(a) for a in sorted(aliases)])
         if l in self.aliases:
             return self.aliases[l]
-        print("aliases are: {}".format(aliases))
         # Allocate space, including for the terminating null.
         ir = IndexRange(len(self.alias_buffer), len(l))
         self.alias_buffer.extend(l)
         self.aliases[l] = ir
         return ir
 
-    def AddEnumList(self, kind: EnumKind, words: list[int]) -> IndexRange:
+    def AddEnumList(self, kind: EnumKind, words: list[str]) -> IndexRange:
         """
-        Ensures an ordered list of 32-bit integers (words) exists in the word table
+        Ensures an ordered list enum names exists in the word table
         for the given enum kind.
         Returns the IndexRange for the list itself.
         """
-        l = WordList(words)
+        l = StringList(words)
         if l in self.enums[kind]:
             return self.enums[kind][l]
         ir = IndexRange(len(self.enum_buffer[kind]), len(l))
