@@ -39,16 +39,16 @@ class TestString(unittest.TestCase):
     self.assertEqual(x.strings, {"abc": IndexRange(0,4)})
 
     qz_ir = x.AddString("qz")
-    self.assertEqual(qz_ir, IndexRange(4,7))
+    self.assertEqual(qz_ir, IndexRange(4,3))
     self.assertEqual(x.string_total_len, 7)
     self.assertEqual(x.string_buffer, ["abc", "qz"])
-    self.assertEqual(x.strings, {"abc": IndexRange(0,4), "qz": IndexRange(4,7)})
+    self.assertEqual(x.strings, {"abc": IndexRange(0,4), "qz": IndexRange(4,3)})
 
     empty_ir = x.AddString("")
-    self.assertEqual(empty_ir, IndexRange(7,8))
+    self.assertEqual(empty_ir, IndexRange(7,1))
     self.assertEqual(x.string_total_len, 8)
     self.assertEqual(x.string_buffer, ["abc", "qz", ""])
-    self.assertEqual(x.strings, {"abc": IndexRange(0,4), "qz": IndexRange(4,7), "": IndexRange(7,8)})
+    self.assertEqual(x.strings, {"abc": IndexRange(0,4), "qz": IndexRange(4,3), "": IndexRange(7,1)})
 
   def test_AddString_idempotent(self) -> None:
     x = Context()

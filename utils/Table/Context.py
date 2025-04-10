@@ -57,7 +57,7 @@ class Context():
             return self.strings[s]
         # Allocate space, including for the terminating null.
         s_space: int = len(s) + 1
-        ir = IndexRange(self.string_total_len, self.string_total_len + s_space)
+        ir = IndexRange(self.string_total_len, s_space)
         self.strings[s] = ir
         self.string_total_len += s_space
         self.string_buffer.append(s)
@@ -73,6 +73,7 @@ class Context():
         l = AliasList([self.AddString(a) for a in sorted(aliases)])
         if l in self.aliases:
             return self.aliases[l]
+        print("aliases are: {}".format(aliases))
         # Allocate space, including for the terminating null.
         ir = IndexRange(len(self.alias_buffer), len(l))
         self.alias_buffer.extend(l)
@@ -99,4 +100,11 @@ class Context():
         s = []
         for k,v in self.strings.items():
             s.append("'{}': {}".format(k,str(v)))
-        print("strings: {}".format('\n'.join(s)))
+        print("strings: {}\n".format('\n'.join(s)))
+
+        print("alias_buffer: {}".format([str(x) for x in self.alias_buffer]))
+        l = []
+        for ak,av in self.aliases.items():
+            l.append(" {} -> {},".format([str(x) for x in ak], str(av)))
+        print("aliases: {}".format('\n'.join(l)))
+
