@@ -190,7 +190,6 @@ class Grammar():
         name_range_for_kind: dict[str,IndexRange.IndexRange] = {}
         for operand_kind_json in self.operand_kinds:
             kind: str = operand_kind_json['kind']
-            print('// kind {}'.format(kind))
             if ShouldEmit(operand_kind_json):
                 operands = [Operand.Operand(o) for o in operand_kind_json['enumerants']]
                 names: list[tuple[str,int]] = []
@@ -207,28 +206,24 @@ class Grammar():
         operand_name_strings = [ '{{{}, {}}},'.format(str(nv[0]),nv[1]) for nv in operand_names ]
         operand_name_bykind_range_strings = [
                 '{},// {}'.format(name_range_for_kind[ok['kind']], ok['kind']) for ok in self.operand_kinds]
-        return 'operand name strings\n' + '\n'.join(operand_name_strings) + '\noperand name bykind\n' + '\n'.join(operand_name_bykind_range_strings) + '\n'
+        #return 'operand name strings\n' + '\n'.join(operand_name_strings) + '\noperand name bykind\n' + '\n'.join(operand_name_bykind_range_strings) + '\n'
 
-        # Each entry is an operand description, and corresponds to an entry in
-        # kOperands.
+        # Populate kOperandsByValue
         operands_by_value: list[str] = []
-
-        # Maps operand kind name as in the grammar file, to the index
-        # range into operands_by_value and operand_names, respectively.
-        value_range_for_kind: dict[str,IndexRange.IndexRange] = {}
-
+        operands_by_value_by_kind: dict[str,IndexRange.IndexRange] = {}
         for operand_kind_json in self.operand_kinds:
             kind: str = operand_kind_json['kind']
-
-            first_value = len(operands_by_value)
-            first_name = len(operand_names)
-
             if ShouldEmit(operand_kind_json):
+                operands = [Operand.Operand(o) for o in operand_kind_json['enumerants']]
+                for o in sorted(operands, key = lambda o: o.value):
+                    pass
 
-                operands = [Operand(o) for o in operand_kind['enumerants']]
-                operands = sorted(operands, key=lambda o: o.value)
-                enumerants = [e['enumerant'] for e in operand_kind['enumerants']]
 
+
+                operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), operand_descs)
+                operands_by_value.extend(operand_descs)
+            else:
+                operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), 0)
 
 
 
