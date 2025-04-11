@@ -16,8 +16,6 @@
 #from typing import *
 from enum import IntEnum
 from . IndexRange import *
-from . AliasList import *
-from . WordList import *
 from . StringList import *
 
 
