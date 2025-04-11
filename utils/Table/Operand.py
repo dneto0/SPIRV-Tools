@@ -37,7 +37,7 @@ class Operand():
             if val.startswith("0x"):
                 return int(val, 16)
             else:
-                raise Exception("Invalid hex value for operand {}: {}".format(self.enumerant, val))
+                return int(val, 10)
         else:
             raise Exception("operand needs a value integer or string")
 
@@ -48,6 +48,14 @@ class Operand():
     @property
     def extensions(self) -> list[str]:
         return self._obj.get('extensions',[])
+
+    @property
+    def aliases(self) -> list[str]:
+        return self._obj.get('aliases',[])
+
+    @property
+    def parameters(self) -> list[dict]:
+        return self._obj.get('parameters',[])
 
     @property
     def version(self) -> str | None:

@@ -25,12 +25,20 @@ class TestOperand(unittest.TestCase):
         x = Operand({'value': 123});
         self.assertEqual(x.value, 123);
 
-    def test_value_hex(self) -> None:
+    def test_value_str_hex(self) -> None:
         x = Operand({'value': "0x0101"});
         self.assertEqual(x.value, 257);
 
-    def test_value_invalid_hex_raises(self) -> None:
+    def test_value_str_dec(self) -> None:
         x = Operand({'value': "0101"});
+        self.assertEqual(x.value, 101);
+
+    def test_value_str_invalid_dec(self) -> None:
+        x = Operand({'value': "01ab"});
+        self.assertRaises(Exception, lambda y: x.value, 0);
+
+    def test_value_str_invalid_hex(self) -> None:
+        x = Operand({'value': "0x010j"});
         self.assertRaises(Exception, lambda y: x.value, 0);
 
     def test_capabilities_absent(self) -> None:
@@ -48,6 +56,22 @@ class TestOperand(unittest.TestCase):
     def test_extensions_present(self) -> None:
         x = Operand({'extensions': ['abc', 'def']});
         self.assertEqual(x.extensions, ['abc', 'def']);
+
+    def test_aliases_absent(self) -> None:
+        x = Operand({});
+        self.assertEqual(x.aliases, []);
+
+    def test_aliases_present(self) -> None:
+        x = Operand({'aliases': ['abc', 'def']});
+        self.assertEqual(x.aliases, ['abc', 'def']);
+
+    def test_parameters_absent(self) -> None:
+        x = Operand({});
+        self.assertEqual(x.parameters, []);
+
+    def test_parameters_present(self) -> None:
+        x = Operand({'parameters': ['abc', 'def']});
+        self.assertEqual(x.parameters, ['abc', 'def']);
 
     def test_version_absent(self) -> None:
         x = Operand({});
