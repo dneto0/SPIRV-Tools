@@ -116,7 +116,7 @@ spv_result_t spvOperandTableValueLookup(spv_target_env,
     const auto end = group.entries + group.count;
 
     // Assumes the underlying table is already sorted ascendingly according to
-    // opcode value.
+    // operand value.
     auto it = std::lower_bound(beg, end, needle, comp);
     if (it != end && it->value == value) {
       // The current operand is considered available as long as
