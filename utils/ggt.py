@@ -206,7 +206,6 @@ class Grammar():
         operand_name_strings = [ '{{{}, {}}},'.format(str(nv[0]),nv[1]) for nv in operand_names ]
         operand_name_bykind_range_strings = [
                 '{},// {}'.format(name_range_for_kind[ok['kind']], ok['kind']) for ok in self.operand_kinds]
-        #return 'operand name strings\n' + '\n'.join(operand_name_strings) + '\noperand name bykind\n' + '\n'.join(operand_name_bykind_range_strings) + '\n'
 
         # Populate kOperandsByValue
         operands_by_value: list[str] = []
@@ -215,18 +214,44 @@ class Grammar():
             kind: str = operand_kind_json['kind']
             if ShouldEmit(operand_kind_json):
                 operands = [Operand.Operand(o) for o in operand_kind_json['enumerants']]
+                operand_descs: list[str] = []
                 for o in sorted(operands, key = lambda o: o.value):
-                    pass
-
-
-
-                operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), operand_descs)
+                    desc = [
+                        str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
+                        o.value,
+                        self.context.AddStringList('alias', o.aliases),
+                        self.context.AddStringList('capability', o.capabilities),
+                        self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
+                        convert_min_required_version(o.version),
+                        convert_max_required_version(o.lastVersion),
+                    ]
+                    operand_descs.append('{' + ','.join([str(d) for d in desc]) + '},')
+                operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), len(operand_descs))
                 operands_by_value.extend(operand_descs)
             else:
                 operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), 0)
 
+        operands_by_value_by_kind_strings = [
+                '{},// {}'.format(str(operands_by_value_by_kind[ok['kind']]), ok['kind']) for ok in self.operand_kinds]
 
+        parts: list[str] = []
+        parts.append("struct NameValue { IndexRange name; uint32_t value; };")
+        parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
+        parts.extend(['  ' + str(x) for x in operand_name_strings])
+        parts.append("};")
 
+        return '\n'.join(parts)
+
+        return '\n'.join([
+            '// operand name strings',
+            '\n'.join(operand_name_strings),
+            '\n// operand name by kind',
+            '\n'.join(operand_name_bykind_range_strings),
+            '\n// operand by value',
+            '\n'.join(operands_by_value),
+            '\n// operand by value by kind',
+            '\n'.join(operands_by_value_by_kind_strings),
+            '\n'])
 
     def InstructionTableBody(self, insts) -> str:
         """
