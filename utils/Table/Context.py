@@ -78,11 +78,17 @@ class Context():
         self.string_total_len: int = 0  # Sum of  lengths of all strings in string_buffer
         self.string_buffer: list[str] = []
         self.strings: dict[str, IndexRange] = {}
+        self.ir_to_string: dict[IndexRange, str] = {} # Invers of self.strings
 
         self.range_buffer: dict[str,list[IndexRange]] = {}
         # We need StringList here because it's hashable, and so it
         # can be used as the key for a dict.
         self.ranges: dict[str,dict[StringList,IndexRange]] = {}
+
+    def GetString(self, ir: IndexRange) -> str:
+        if ir in self.ir_to_string:
+            return self.ir_to_string[ir]
+        raise Exception("unregistered index range {}".format(str(ir)))
 
     def AddString(self, s: str) -> IndexRange:
         """
@@ -95,6 +101,7 @@ class Context():
         s_space: int = len(s) + 1
         ir = IndexRange(self.string_total_len, s_space)
         self.strings[s] = ir
+        self.ir_to_string[ir] = s
         self.string_total_len += s_space
         self.string_buffer.append(s)
         return ir

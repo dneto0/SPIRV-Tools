@@ -389,13 +389,15 @@ struct InstructionDesc {
         parts.append(';\n');
         self.body_decls.extend(parts);
 
-        """
         parts = []
         parts.append('static const spv::Capability kCapabilities[] = {');
-        parts.extend(['  {} // {}'.format(c_str(s), str(self.context.strings[s])) for s in self.context.string_buffer])
+        capability_ranges = self.context.range_buffer['capability']
+        for i in range(0, len(capability_ranges)):
+            ir = capability_ranges[i]
+            cap = self.context.GetString(ir)
+            parts.append('  spv::Capability::{}, // {}'.format(cap, i))
         parts.append('};\n');
         self.body_decls.extend(parts);
-        """
 
 
 def make_path_to_file(f: str) -> None:
