@@ -379,16 +379,37 @@ struct InstructionDesc {
 
         This method must be called after computing instruction and operand tables.
         """
+
         def c_str(s: str):
-            return json.dumps(s)
+            """
+            Returns the source for a C string literal or the given string, including
+            the explicit null at the end
+            """
+            return '"{}\\0"'.format(json.dumps(s).strip('"'))
 
         parts: list[str] = []
+        parts.append("// Buffer of characters, referenced by IndexRanges elsewhere.")
+        parts.append("// Each IndexRange denotes a string.")
         parts.append('static const char kStrings[] =');
         parts.extend(['  {} // {}'.format(c_str(s), str(self.context.strings[s])) for s in self.context.string_buffer])
         parts.append(';\n');
         self.body_decls.extend(parts);
 
+        parts: list[str] = []
+        parts.append("""// Buffer of IndexRanges, where each represents a string by referencing
+the strings table.  This table is itself referenced by IndexRanges
+elsewhere, i.e. the 'aliases' field of an instruction or operand
+description.""")
+        parts.append('static const IndexRange kAliasRanges[] = {');
+        ranges = self.context.range_buffer['alias']
+        for i in range(0, len(ranges)):
+            ir = ranges[i]
+            parts.append('  {}, // {} {}'.format(str(ir), i, self.context.GetString(ir)))
+        parts.append('};\n');
+        self.body_decls.extend(parts);
+
         parts = []
+        parts.append("// Buffer of capability sequences, referenced by IndexRanges elsewhere.")
         parts.append('static const spv::Capability kCapabilities[] = {');
         capability_ranges = self.context.range_buffer['capability']
         for i in range(0, len(capability_ranges)):
@@ -399,16 +420,18 @@ struct InstructionDesc {
         self.body_decls.extend(parts);
 
         parts = []
+        parts.append("// Buffer of extension sequences, referenced by IndexRanges elsewhere.")
         parts.append('static const spvtools::Extension kExtensions[] = {');
         ranges = self.context.range_buffer['extension']
         for i in range(0, len(ranges)):
             ir = ranges[i]
             name = self.context.GetString(ir)
-            parts.append('  spvtools::Extension::{}, // {}'.format(name, i))
+            parts.append('  spvtools::Extension::k{}, // {}'.format(name, i))
         parts.append('};\n');
         self.body_decls.extend(parts);
 
         parts = []
+        parts.append("// Buffer of operand type sequences, referenced by IndexRanges elsewhere.")
         parts.append('static const spv_operand_type_t kOperands[] = {');
         ranges = self.context.range_buffer['operand']
         for i in range(0, len(ranges)):
@@ -1266,6 +1289,8 @@ def main():
         print('\n'.join(g.header_decls))
         print("\n//body")
         print('\n'.join(g.body_decls))
+        print("\n//extension enum")
+        print(g.ExtensionEnumList())
 
         print("")
         g.context.dump()
