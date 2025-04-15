@@ -138,7 +138,9 @@ class Grammar():
     Assumes an index range is emitted by printing an IndexRange object.
     """
     def __init__(self, extensions: list[str], operand_kinds:list[dict]) -> None:
-        self.context = Context.Context()
+        self.context: dict[str, Context.Context] = {
+                Context.Context()
+            }
         self.extensions = extensions
         self.operand_kinds = sorted(operand_kinds, key = lambda ok: ok['kind'])
         self.header_decls: list[str] = [self.IndexRangeDecls()]
@@ -197,7 +199,7 @@ constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
 """
 struct NameValue {
   // Location of the null-terminated name in the global string table.
-  IndexRange name; 
+  IndexRange name;
   // Enum value in the binary format.
   uint32_t value;
 };
@@ -222,7 +224,7 @@ struct OperandDesc {
 
         def ShouldEmit(operand_kind_json: dict[str,any]):
             """ Returns true if we should emit a table for the given
-            operand kind. 
+            operand kind.
             """
             category = operand_kind_json.get('category')
             return category in ['ValueEnum', 'BitEnum']
@@ -247,13 +249,12 @@ struct OperandDesc {
                 operand_names.extend(sorted_pairs)
             else:
                 pass
-                #name_range_for_kind[kind] = IndexRange.IndexRange(len(operand_names), 0)
         operand_name_strings = [ '{{{}, {}}},'.format(str(nv[0]),nv[1]) for nv in operand_names ]
 
         parts: list[str] = []
         parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
         parts.extend(['  ' + str(x) for x in operand_name_strings])
-        parts.append("};")
+        parts.append("};\n")
         self.body_decls.extend(parts)
 
         parts = ["static IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
@@ -287,12 +288,11 @@ struct OperandDesc {
                 operands_by_value.extend(operand_descs)
             else:
                 pass
-                #operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), 0)
 
         parts = []
         parts.append("static kOperandsByValue std::array<OperandDesc, {}> = {{".format(len(operands_by_value)))
         parts.extend(['  ' + str(x) for x in operands_by_value])
-        parts.append("};")
+        parts.append("};\n")
         self.body_decls.extend(parts)
 
         parts = ["static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
@@ -301,7 +301,7 @@ struct OperandDesc {
                 ctype_for[kind],
                 str(operands_by_value_by_kind[kind])))
         parts.append("    default: break;");
-        parts.append("  }\n  return IR(0,0);\n}")
+        parts.append("  }\n  return IR(0,0);\n}\n")
         self.body_decls.extend(parts)
 
 
@@ -312,6 +312,27 @@ struct OperandDesc {
         Params:
             insts: an array of instructions objects using the JSON schema
         """
+        self.header_decls.append(
+"""
+struct InstructionDesc {
+  const uint32_t value;
+  const bool hasResult;
+  const bool hasType;
+  const IndexRange name;
+  const IndexRange aliases;       // Entries in the aliases table.
+  const IndexRange capabilities;  // Entries in the capabilities table.
+  // A set of extensions that enable this feature. If empty then this operand
+  // value is in core and its availability is subject to minVersion. The
+  // assembler, binary parser, and disassembler ignore this rule, so you can
+  // freely process invalid modules.
+  const IndexRange extensions;    // Entries in the extensions table.
+  const IndexRange operands;      // Entries in the operand-list table.
+  // Minimal core SPIR-V version required for this feature, if without
+  // extensions. ~0u means reserved for future use. ~0u and non-empty
+  // extension lists means only available in extensions.
+
+};
+""")
 
         # Preload the string list with opcodes, without the 'Op' prefix.
         self.context.AddStringList('opcode', sorted([i['opname'][2:] for i in insts]))
@@ -327,37 +348,54 @@ struct OperandDesc {
             hasType = 'IdResultType' in operand_kinds
 
             parts.extend([
-                self.context.AddString(opname[2:]),
                 'spv::Op::' + opname,
-                self.context.AddStringList('alias', inst.get('aliases',[])),
-                self.context.AddStringList('capability', inst.get('capabilities',[])),
-                self.context.AddStringList('operand', operand_kinds),
                 c_bool(hasResult),
                 c_bool(hasType),
+                self.context.AddString(opname[2:]),
+                self.context.AddStringList('alias', inst.get('aliases',[])),
+                self.context.AddStringList('capability', inst.get('capabilities',[])),
                 self.context.AddStringList('extension', inst.get('extensions',[])),
+                self.context.AddStringList('operand', operand_kinds),
                 convert_min_required_version(inst.get('version', None)),
                 convert_max_required_version(inst.get('lastVersion', None)),
             ])
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
-        self.body_decls.extend(lines)
+        parts: list[str] = []
+        parts.append("static std::array<InstructionDesc, {}> kInstructionDesc = {{".format(len(lines)));
+        parts.extend(['  ' + l for l in lines])
+        parts.append("};\n");
+        self.body_decls.extend(parts)
 
-    def OperandDescriptions(self) -> str:
+
+    def ComputeLeafTables(self) -> None:
         """
-        Returns the string for the body of the table for operand types.
+        Generates the tables that the instruction and operand tables point to.
+        The tables are:
+            - the string table
+            - the table of sequences of:
+               - aliases
+               - capabilities
+               - extensions
+               - operands
+
+        This method must be called after computing instruction and operand tables.
         """
-        lines: list[str] = []
-        for ok in self.operands_kinds:
-            parts: list[str] = []
+        def c_str(s: str):
+            return json.dumps(s)
 
-            opname: str = inst['opname']
+        parts: list[str] = []
+        parts.append('static const char kStrings[] =');
+        parts.extend(['  {} // {}'.format(c_str(s), str(self.context.strings[s])) for s in self.context.string_buffer])
+        parts.append(';\n');
+        self.body_decls.extend(parts);
 
-            operands: list[dict] = inst.get('operands',[])
-            operand_kinds = [convert_operand_kind(o) for o in operands]
-            hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
-            hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
-
-
+        parts = []
+        parts.append('static const spv::Capability kCapabilities[] = {');
+        for i in range(0, len(self.context.ranges
+        parts.extend(['  {} // {}'.format(c_str(s), str(self.context.strings[s])) for s in self.context.string_buffer])
+        parts.append('};\n');
+        self.body_decls.extend(parts);
 
 
 def make_path_to_file(f: str) -> None:
@@ -1200,9 +1238,9 @@ def main():
 
         g = Grammar(extensions, operand_kinds)
 
-
         g.ComputeOperandTables()
         g.ComputeInstructionTableBody(core_grammar['instructions'])
+        g.ComputeLeafTables()
         print("//headers")
         print('\n'.join(g.header_decls))
         print("\n//body")
