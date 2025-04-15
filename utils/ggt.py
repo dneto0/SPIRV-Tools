@@ -141,6 +141,9 @@ class Grammar():
         self.context = Context.Context()
         self.extensions = extensions
         self.operand_kinds = sorted(operand_kinds, key = lambda ok: ok['kind'])
+        self.header_decls: list[str] = [self.IndexRangeDecls()]
+        self.body_decls: list[str] = []
+
         if len(self.operand_kinds) == 0:
             raise Exception("operand_kinds should be a non-empty list")
         if len(self.extensions) == 0:
@@ -149,6 +152,16 @@ class Grammar():
         # Preload the string table
         self.context.AddStringList('extension', extensions)
 
+    def IndexRangeDecls(self) -> str:
+        return """
+struct IndexRange {
+  uint32_t first; // index of the first element in the range
+  uint32_t count; // number of elements in the range
+};
+constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
+  return {first, count};
+}
+"""
 
     def dump(self) -> None:
         self.context.dump()
@@ -157,7 +170,7 @@ class Grammar():
         """Returns enumeration containing extensions declared in the grammar."""
         return ',\n'.join(['k' + e for e in self.extensions])
 
-    def OperandTables(self) -> str:
+    def ComputeOperandTables(self) -> None:
         """
         Returns the string for the C declarations of the operand kind tables.
 
@@ -180,16 +193,47 @@ class Grammar():
 
         """
 
-        def ShouldEmit(operand_kind_json: dict[str,any]):
-            """ Returns true if we should emit a table for the given operand kind. """
-            return operand_kind_json.get('category') in ['ValueEnum', 'BitEnum']
+        self.header_decls.append(
+"""
+struct NameValue {
+  // Location of the null-terminated name in the global string table.
+  IndexRange name; 
+  // Enum value in the binary format.
+  uint32_t value;
+};
+struct OperandDesc {
+  uint32_t value;
+  IndexRange name;
+  IndexRange aliases;       // Entries in the aliases table.
+  IndexRange capabilities;  // Entries in the capabilities table.
+  // A set of extensions that enable this feature. If empty then this operand
+  // value is in core and its availability is subject to minVersion. The
+  // assembler, binary parser, and disassembler ignore this rule, so you can
+  // freely process invalid modules.
+  IndexRange extensions;    // Entries in the extensions table.
+  IndexRange operands;      // Entries in the operand-list table.
+  // Minimal core SPIR-V version required for this feature, if without
+  // extensions. ~0u means reserved for future use. ~0u and non-empty
+  // extension lists means only available in extensions.
+  uint32_t minVersion;
+  uint32_t lastVersion;
+};
+""")
 
+        def ShouldEmit(operand_kind_json: dict[str,any]):
+            """ Returns true if we should emit a table for the given
+            operand kind. 
+            """
+            category = operand_kind_json.get('category')
+            return category in ['ValueEnum', 'BitEnum']
 
         # Populate kOperandNames
         operand_names: list[tuple[IndexRange.IndexRange,int]] = []
         name_range_for_kind: dict[str,IndexRange.IndexRange] = {}
+        ctype_for: dict[str,str] = {}
         for operand_kind_json in self.operand_kinds:
             kind: str = operand_kind_json['kind']
+            ctype_for[kind] = convert_operand_kind(operand_kind_json)
             if ShouldEmit(operand_kind_json):
                 operands = [Operand.Operand(o) for o in operand_kind_json['enumerants']]
                 names: list[tuple[str,int]] = []
@@ -202,10 +246,23 @@ class Grammar():
                 name_range_for_kind[kind] = IndexRange.IndexRange(len(operand_names), len(sorted_pairs))
                 operand_names.extend(sorted_pairs)
             else:
-                name_range_for_kind[kind] = IndexRange.IndexRange(len(operand_names), 0)
+                pass
+                #name_range_for_kind[kind] = IndexRange.IndexRange(len(operand_names), 0)
         operand_name_strings = [ '{{{}, {}}},'.format(str(nv[0]),nv[1]) for nv in operand_names ]
-        operand_name_bykind_range_strings = [
-                '{},// {}'.format(name_range_for_kind[ok['kind']], ok['kind']) for ok in self.operand_kinds]
+
+        parts: list[str] = []
+        parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
+        parts.extend(['  ' + str(x) for x in operand_name_strings])
+        parts.append("};")
+        self.body_decls.extend(parts)
+
+        parts = ["static IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
+        for kind, ir in name_range_for_kind.items():
+            parts.append("    case {}: return {};".format(
+                ctype_for[kind],
+                str(name_range_for_kind[kind])))
+        parts.append("    default: break;");
+        parts.append("  }\n  return IR(0,0);\n}")
 
         # Populate kOperandsByValue
         operands_by_value: list[str] = []
@@ -217,8 +274,8 @@ class Grammar():
                 operand_descs: list[str] = []
                 for o in sorted(operands, key = lambda o: o.value):
                     desc = [
-                        str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
                         o.value,
+                        str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
                         self.context.AddStringList('alias', o.aliases),
                         self.context.AddStringList('capability', o.capabilities),
                         self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
@@ -229,31 +286,26 @@ class Grammar():
                 operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), len(operand_descs))
                 operands_by_value.extend(operand_descs)
             else:
-                operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), 0)
+                pass
+                #operands_by_value_by_kind[kind] = IndexRange.IndexRange(len(operands_by_value), 0)
 
-        operands_by_value_by_kind_strings = [
-                '{},// {}'.format(str(operands_by_value_by_kind[ok['kind']]), ok['kind']) for ok in self.operand_kinds]
-
-        parts: list[str] = []
-        parts.append("struct NameValue { IndexRange name; uint32_t value; };")
-        parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
-        parts.extend(['  ' + str(x) for x in operand_name_strings])
+        parts = []
+        parts.append("static kOperandsByValue std::array<OperandDesc, {}> = {{".format(len(operands_by_value)))
+        parts.extend(['  ' + str(x) for x in operands_by_value])
         parts.append("};")
+        self.body_decls.extend(parts)
 
-        return '\n'.join(parts)
+        parts = ["static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
+        for kind, ir in operands_by_value_by_kind.items():
+            parts.append("    case {}: return {};".format(
+                ctype_for[kind],
+                str(operands_by_value_by_kind[kind])))
+        parts.append("    default: break;");
+        parts.append("  }\n  return IR(0,0);\n}")
+        self.body_decls.extend(parts)
 
-        return '\n'.join([
-            '// operand name strings',
-            '\n'.join(operand_name_strings),
-            '\n// operand name by kind',
-            '\n'.join(operand_name_bykind_range_strings),
-            '\n// operand by value',
-            '\n'.join(operands_by_value),
-            '\n// operand by value by kind',
-            '\n'.join(operands_by_value_by_kind_strings),
-            '\n'])
 
-    def InstructionTableBody(self, insts) -> str:
+    def ComputeInstructionTableBody(self, insts) -> None:
         """
         Returns the string for the body of the table for the given instructions.
 
@@ -288,7 +340,7 @@ class Grammar():
             ])
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
-        return '\n'.join(lines)
+        self.body_decls.extend(lines)
 
     def OperandDescriptions(self) -> str:
         """
@@ -306,26 +358,6 @@ class Grammar():
             hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
 
 
-"""
-  const char* name;
-  const uint32_t value;
-  const uint32_t numAliases;
-  const char** aliases;
-  const uint32_t numCapabilities;
-  const spv::Capability* capabilities;
-  // A set of extensions that enable this feature. If empty then this operand
-  // value is in core and its availability is subject to minVersion. The
-  // assembler, binary parser, and disassembler ignore this rule, so you can
-  // freely process invalid modules.
-  const uint32_t numExtensions;
-  const spvtools::Extension* extensions;
-  const spv_operand_type_t operandTypes[16];  // TODO: Smaller/larger?
-  // Minimal core SPIR-V version required for this feature, if without
-  // extensions. ~0u means reserved for future use. ~0u and non-empty extension
-  // lists means only available in extensions.
-  const uint32_t minVersion;
-  const uint32_t lastVersion;
-"""
 
 
 def make_path_to_file(f: str) -> None:
@@ -1169,8 +1201,12 @@ def main():
         g = Grammar(extensions, operand_kinds)
 
 
-        print(g.OperandTables())
-        print(g.InstructionTableBody(core_grammar['instructions']))
+        g.ComputeOperandTables()
+        g.ComputeInstructionTableBody(core_grammar['instructions'])
+        print("//headers")
+        print('\n'.join(g.header_decls))
+        print("\n//body")
+        print('\n'.join(g.body_decls))
 
         print("")
         g.context.dump()
