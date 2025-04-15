@@ -304,9 +304,9 @@ struct OperandDesc {
         self.body_decls.extend(parts)
 
 
-    def ComputeInstructionTableBody(self, insts) -> None:
+    def ComputeInstructionTable(self, insts) -> None:
         """
-        Returns the string for the body of the table for the given instructions.
+        Returns the C++ declaration for the table for the given instructions.
 
         Params:
             insts: an array of instructions objects using the JSON schema
@@ -342,9 +342,9 @@ struct InstructionDesc {
 
             opname: str = inst['opname']
 
-            operand_kinds = [o['kind'] for o in inst.get('operands',[])]
-            hasResult = 'IdResult' in operand_kinds
-            hasType = 'IdResultType' in operand_kinds
+            operand_kinds = [convert_operand_kind(o) for o in inst.get('operands',[])]
+            hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
+            hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
 
             parts.extend([
                 'spv::Op::' + opname,
@@ -373,7 +373,6 @@ struct InstructionDesc {
         The tables are:
             - the string table
             - the table of sequences of:
-               - aliases
                - capabilities
                - extensions
                - operands
@@ -396,6 +395,26 @@ struct InstructionDesc {
             ir = capability_ranges[i]
             cap = self.context.GetString(ir)
             parts.append('  spv::Capability::{}, // {}'.format(cap, i))
+        parts.append('};\n');
+        self.body_decls.extend(parts);
+
+        parts = []
+        parts.append('static const spvtools::Extension kExtensions[] = {');
+        ranges = self.context.range_buffer['extension']
+        for i in range(0, len(ranges)):
+            ir = ranges[i]
+            name = self.context.GetString(ir)
+            parts.append('  spvtools::Extension::{}, // {}'.format(name, i))
+        parts.append('};\n');
+        self.body_decls.extend(parts);
+
+        parts = []
+        parts.append('static const spv_operand_type_t kOperands[] = {');
+        ranges = self.context.range_buffer['operand']
+        for i in range(0, len(ranges)):
+            ir = ranges[i]
+            name = self.context.GetString(ir)
+            parts.append('  {}, // {} {}'.format(name, i, name))
         parts.append('};\n');
         self.body_decls.extend(parts);
 
@@ -1241,7 +1260,7 @@ def main():
         g = Grammar(extensions, operand_kinds)
 
         g.ComputeOperandTables()
-        g.ComputeInstructionTableBody(core_grammar['instructions'])
+        g.ComputeInstructionTable(core_grammar['instructions'])
         g.ComputeLeafTables()
         print("//headers")
         print('\n'.join(g.header_decls))
