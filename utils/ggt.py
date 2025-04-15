@@ -202,17 +202,18 @@ struct NameValue {
   // Enum value in the binary format.
   uint32_t value;
 };
+// Describes a SPIR-V operand.
 struct OperandDesc {
   uint32_t value;
-  IndexRange name;
-  IndexRange aliases;       // Entries in the aliases table.
-  IndexRange capabilities;  // Entries in the capabilities table.
+  IndexRange name;          // Indexes kStrings
+  IndexRange aliases;       // Indexes kAliasSpans
+  IndexRange capabilities;  // Indexes kCapabilitySpans
   // A set of extensions that enable this feature. If empty then this operand
   // value is in core and its availability is subject to minVersion. The
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
-  IndexRange extensions;    // Entries in the extensions table.
-  IndexRange operands;      // Entries in the operand-list table.
+  IndexRange extensions;    // Indexes kExtensionSpans
+  IndexRange operands;      // Indexes kOperandSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
@@ -237,25 +238,35 @@ struct OperandDesc {
             ctype_for[kind] = convert_operand_kind(operand_kind_json)
             if ShouldEmit(operand_kind_json):
                 operands = [Operand(o) for o in operand_kind_json['enumerants']]
-                names: list[tuple[str,int]] = []
+                tuples: list[tuple[str,int,str]] = []
                 for o in operands:
-                    names.append((o.enumerant, o.value))
+                    tuples.append((o.enumerant, o.value, kind))
                     for a in o.aliases:
-                        names.append((a, o.value))
-                names = sorted(names, key = lambda pair: pair[0])
-                sorted_pairs = [(self.context.AddString(nv[0]),nv[1]) for nv in names]
-                name_range_for_kind[kind] = IndexRange(len(operand_names), len(sorted_pairs))
-                operand_names.extend(sorted_pairs)
+                        tuples.append((a, o.value, kind))
+                tuples = sorted(tuples, key = lambda t: t[0])
+                ir_tuples = [(self.context.AddString(t[0]),t[1]) for t in tuples]
+                name_range_for_kind[kind] = IndexRange(len(operand_names), len(ir_tuples))
+                operand_names.extend(ir_tuples)
             else:
                 pass
-        operand_name_strings = [ '{{{}, {}}},'.format(str(nv[0]),nv[1]) for nv in operand_names ]
+        operand_name_strings: list[str] = []
+        for i in range(0, len(operand_names)):
+            ir, value = operand_names[i]
+            operand_name_strings.append('{{{}, {}}}, // {} {}'.format(str(ir),value,i,self.context.GetString(ir)))
 
         parts: list[str] = []
+        parts.append("""// Operand names and values, ordered by (operand kind, name)
+// The fields in order are:
+//   name, either the primary name or an alias, indexing into kStrings
+//   enum value""")
         parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
         parts.extend(['  ' + str(x) for x in operand_name_strings])
         parts.append("};\n")
         self.body_decls.extend(parts)
 
+        parts.append("""// Maps an operand kind to possible names for operands of that kind.
+// The result is an IndexRange into kOperandNames, and the names
+// are sorted by name within that span.""")
         parts = ["static IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
         for kind, ir in name_range_for_kind.items():
             parts.append("    case {}: return {};".format(
@@ -278,6 +289,7 @@ struct OperandDesc {
                         str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
                         self.context.AddStringList('alias', o.aliases),
                         self.context.AddStringList('capability', o.capabilities),
+                        self.context.AddStringList('extension', o.extensions),
                         self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
                         convert_min_required_version(o.version),
                         convert_max_required_version(o.lastVersion),
@@ -289,12 +301,26 @@ struct OperandDesc {
                 pass
 
         parts = []
+        parts.append("""// Operand descriptions, ordered by (operand kind, operand enum value).
+// The fields in order are:
+//   enum value
+//   name, a character-counting IndexRange into kStrings
+//   aliases, an IndexRange into kAliasSpans
+//   capabilities, an IndexRange into kCapabilitySpans
+//   extensions, as an IndexRange into kExtensionSpans
+//   operands, an IndexRange into kOperandSpans
+//   version, first version of SPIR-V that has it
+//   lastVersion, last version of SPIR-V that has it""")
         parts.append("static kOperandsByValue std::array<OperandDesc, {}> = {{".format(len(operands_by_value)))
         parts.extend(['  ' + str(x) for x in operands_by_value])
         parts.append("};\n")
         self.body_decls.extend(parts)
 
-        parts = ["static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
+        parts = []
+        parts.append("""// Maps an operand kind to possible operands for that kind.
+// The result is an IndexRange into kOperandsByValue, and the operands
+// are sorted by value within that span.""")
+        parts.append("static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {")
         for kind, ir in operands_by_value_by_kind.items():
             parts.append("    case {}: return {};".format(
                 ctype_for[kind],
@@ -313,23 +339,25 @@ struct OperandDesc {
         """
         self.header_decls.append(
 """
+// Describes an Instruction
 struct InstructionDesc {
-  const uint32_t value;
+  const uint32_t value;           // Opcode value
   const bool hasResult;
   const bool hasType;
-  const IndexRange name;
-  const IndexRange aliases;       // Entries in the aliases table.
-  const IndexRange capabilities;  // Entries in the capabilities table.
+  const IndexRange name;          // Indexes kStrings
+  const IndexRange aliases;       // Indexes kAliasSpans
+  const IndexRange capabilities;  // Indexes kCapbilitySpans
   // A set of extensions that enable this feature. If empty then this operand
   // value is in core and its availability is subject to minVersion. The
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
-  const IndexRange extensions;    // Entries in the extensions table.
-  const IndexRange operands;      // Entries in the operand-list table.
+  const IndexRange extensions;    // Indexes kExtensionSpans
+  const IndexRange operands;      // Indexes kOperandSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
-
+  uint32_t minVersion;
+  uint32_t lastVersion;
 };
 """)
 
@@ -361,6 +389,18 @@ struct InstructionDesc {
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
         parts: list[str] = []
+        parts.append("""// Instruction descriptions, ordered by opcode.
+// The fields in order are:
+//   opcode
+//   a boolean indicating if the instruction produces a result ID
+//   a boolean indicating if the instruction result ID has a type
+//   opcode name (without the 'Op' prefix), a character-counting IndexRange into kStrings
+//   aliases, an IndexRange into kAliasSpans
+//   capabilities, an IndexRange into kCapabilitySpans
+//   extensions, as an IndexRange into kExtensionSpans
+//   operands, an IndexRange into kOperandSpans
+//   version, first version of SPIR-V that has it
+//   lastVersion, last version of SPIR-V that has it""")
         parts.append("static std::array<InstructionDesc, {}> kInstructionDesc = {{".format(len(lines)));
         parts.extend(['  ' + l for l in lines])
         parts.append("};\n");
@@ -388,7 +428,7 @@ struct InstructionDesc {
             return '"{}\\0"'.format(json.dumps(s).strip('"'))
 
         parts: list[str] = []
-        parts.append("// Buffer of characters, referenced by IndexRanges elsewhere.")
+        parts.append("// Array of characters, referenced by IndexRanges elsewhere.")
         parts.append("// Each IndexRange denotes a string.")
         parts.append('static const char kStrings[] =');
         parts.extend(['  {} // {}'.format(c_str(s), str(self.context.strings[s])) for s in self.context.string_buffer])
@@ -396,11 +436,12 @@ struct InstructionDesc {
         self.body_decls.extend(parts);
 
         parts: list[str] = []
-        parts.append("""// Buffer of IndexRanges, where each represents a string by referencing
-the strings table.  This table is itself referenced by IndexRanges
-elsewhere, i.e. the 'aliases' field of an instruction or operand
-description.""")
-        parts.append('static const IndexRange kAliasRanges[] = {');
+        parts.append("""// Array of IndexRanges, where each represents a string by referencing
+// the kStrings table.
+// This array contains all sequences of alias strings used in the grammar.
+// This table is referenced by an IndexRange elsewhere, i.e. by the 'aliases'
+// field of an instruction or operand description.""")
+        parts.append('static const IndexRange kAliasSpans[] = {');
         ranges = self.context.range_buffer['alias']
         for i in range(0, len(ranges)):
             ir = ranges[i]
@@ -409,8 +450,9 @@ description.""")
         self.body_decls.extend(parts);
 
         parts = []
-        parts.append("// Buffer of capability sequences, referenced by IndexRanges elsewhere.")
-        parts.append('static const spv::Capability kCapabilities[] = {');
+        parts.append("// Array of capabilities, referenced by IndexRanges elsewhere.")
+        parts.append("// Contains all sequences of capabilities used in the grammar.")
+        parts.append('static const spv::Capability kCapabilitySpans[] = {');
         capability_ranges = self.context.range_buffer['capability']
         for i in range(0, len(capability_ranges)):
             ir = capability_ranges[i]
@@ -420,8 +462,9 @@ description.""")
         self.body_decls.extend(parts);
 
         parts = []
-        parts.append("// Buffer of extension sequences, referenced by IndexRanges elsewhere.")
-        parts.append('static const spvtools::Extension kExtensions[] = {');
+        parts.append("// Array of extensions, referenced by IndexRanges elsewhere.")
+        parts.append("// Contains all sequences of extensions used in the grammar.")
+        parts.append('static const spvtools::Extension kExtensionSpans[] = {');
         ranges = self.context.range_buffer['extension']
         for i in range(0, len(ranges)):
             ir = ranges[i]
@@ -431,8 +474,9 @@ description.""")
         self.body_decls.extend(parts);
 
         parts = []
-        parts.append("// Buffer of operand type sequences, referenced by IndexRanges elsewhere.")
-        parts.append('static const spv_operand_type_t kOperands[] = {');
+        parts.append("// Array of operand types, referenced by IndexRanges elsewhere.")
+        parts.append("// Contains all sequences of operand types used in the grammar.")
+        parts.append('static const spv_operand_type_t kOperandSpans[] = {');
         ranges = self.context.range_buffer['operand']
         for i in range(0, len(ranges)):
             ir = ranges[i]
