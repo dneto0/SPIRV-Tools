@@ -40,16 +40,17 @@ class Context():
           can be found in the (future) concatenation of all strings in the
           string_buffer.
 
-        - range_buffer: A list of IndexRange objects. Each R is one of:
+        - range_buffer: A dictionary mapping a string kind to a list IndexRange
+              objects R. Each R is one of:
 
             - An index range referencing one string as it appears in the
               (future) concatenation of all strings in the string_buffer.
               In this case R represents a single string.
 
-            - An index range referencing earlier elements in range_buffer
+            - An index range referencing earlier elements in range_buffer[kind]
               itself.  In this case R represents a list of strings.
 
-        - ranges:  An associative container mapping a kind and lists-of-strings
+        - ranges:  A dictionary mapping a string kind and lists-of-strings
             to its encoding in the range_buffer array.
 
             It is a two-level mapping of Python type:
@@ -78,7 +79,7 @@ class Context():
         self.string_buffer: list[str] = []
         self.strings: dict[str, IndexRange] = {}
 
-        self.range_buffer: list[IndexRange] = []
+        self.range_buffer: dict[str,list[IndexRange]] = {}
         # We need StringList here because it's hashable, and so it
         # can be used as the key for a dict.
         self.ranges: dict[str,dict[StringList,IndexRange]] = {}
@@ -100,8 +101,8 @@ class Context():
 
     def AddStringList(self, kind: str, words: list[str]) -> IndexRange:
         """
-        Ensures a list of strings is recorded in range_buffer, and
-        returns its location in the range_buffer.
+        Ensures a list of strings is recorded in range_buffer[kind], and
+        returns its location in the range_buffer[kind].
         As a side effect, also ensures each string in the list is in
         the string_buffer.
         """
@@ -110,12 +111,13 @@ class Context():
         entry: dict[StringList, IndexRange] = self.ranges.get(kind, {})
         if kind not in self.ranges:
             self.ranges[kind] = entry
+            self.range_buffer[kind]: list[IndexRange] = []
 
         if l in entry:
             return entry[l]
         new_ranges = [self.AddString(s) for s in l]
-        ir = IndexRange(len(self.range_buffer), len(new_ranges))
-        self.range_buffer.extend(new_ranges)
+        ir = IndexRange(len(self.range_buffer[kind]), len(new_ranges))
+        self.range_buffer[kind].extend(new_ranges)
         entry[l] = ir
         return ir
 
@@ -134,12 +136,13 @@ class Context():
             s.append("'{}': {}".format(k,str(v)))
         print("strings:\n  {}\n".format('\n  '.join(s)))
 
-        print("range_buffer:")
-        i: int = 0
-        for r in self.range_buffer:
-            print("{}: {}".format(i, str(r)))
-            i += 1
-        print("")
+        for rbk, rbv in self.range_buffer.items():
+            print("range_buffer[{}]:".format(rbk))
+            i: int = 0
+            for r in rbv:
+                print("  {} {}: {}".format(rbk, i, str(r)))
+                i += 1
+            print("")
 
         for rk, rv in self.ranges.items():
             for key,val in rv.items():

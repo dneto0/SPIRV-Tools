@@ -69,7 +69,7 @@ class TestStringList(unittest.TestCase):
     x_ir = x.AddStringList('x', [])
     self.assertEqual(x_ir, IndexRange(0,0))
     self.assertEqual(x.string_buffer, [])
-    self.assertEqual(x.range_buffer, [])
+    self.assertEqual(x.range_buffer, { 'x': [] })
     self.assertEqual(x.ranges, {'x': {StringList([]): IndexRange(0,0)}})
 
   def test_AddgStringList_nonempty(self) -> None:
@@ -77,7 +77,7 @@ class TestStringList(unittest.TestCase):
     x_ir = x.AddStringList('x', ["abc", "def"])
 
     self.assertEqual(x_ir, IndexRange(0,2))
-    self.assertEqual(x.range_buffer, [IndexRange(0,4), IndexRange(4,4)])
+    self.assertEqual(x.range_buffer, {'x': [IndexRange(0,4), IndexRange(4,4)]})
     self.assertEqual(x.ranges, {'x': {StringList(['abc','def']): IndexRange(0,2)}})
 
   def test_AddgStringList_nonempty_idempotent(self) -> None:
@@ -87,7 +87,7 @@ class TestStringList(unittest.TestCase):
 
     self.assertEqual(x_ir, IndexRange(0,2))
     self.assertEqual(y_ir, IndexRange(0,2))
-    self.assertEqual(x.range_buffer, [IndexRange(0,4), IndexRange(4,4)])
+    self.assertEqual(x.range_buffer, {'x': [IndexRange(0,4), IndexRange(4,4)]})
     self.assertEqual(x.ranges, {'x': {StringList(['abc','def']): IndexRange(0,2)}})
 
   def test_AddgStringList_nonempty_does_not_sort(self) -> None:
@@ -97,10 +97,10 @@ class TestStringList(unittest.TestCase):
 
     self.assertEqual(x_ir, IndexRange(0,2))
     self.assertEqual(y_ir, IndexRange(2,2))
-    self.assertEqual(x.range_buffer, [IndexRange(0,4),
-                                      IndexRange(4,4),
-                                      IndexRange(4,4),
-                                      IndexRange(0,4)])
+    self.assertEqual(x.range_buffer, {'x': [IndexRange(0,4),
+                                            IndexRange(4,4),
+                                            IndexRange(4,4),
+                                            IndexRange(0,4)]})
     self.assertEqual(x.ranges, {'x':{StringList(['abc','def']): IndexRange(0,2),
                                      StringList(['def','abc']): IndexRange(2,2)}})
 
@@ -110,14 +110,12 @@ class TestStringList(unittest.TestCase):
     y_ir = x.AddStringList('y', ["ghi", "abc"])
 
     self.assertEqual(x_ir, IndexRange(0,2))
-    self.assertEqual(y_ir, IndexRange(2,2))
+    self.assertEqual(y_ir, IndexRange(0,2))
     self.assertEqual(x.range_buffer,
-                     [IndexRange(0,4),
-                      IndexRange(4,4),
-                      IndexRange(8,4),
-                      IndexRange(0,4)])
+                     {'x': [IndexRange(0,4), IndexRange(4,4)],
+                      'y': [IndexRange(8,4), IndexRange(0,4)]})
     self.assertEqual(x.ranges, {'x': {StringList(['abc','def']): IndexRange(0,2)},
-                                'y': {StringList(['ghi','abc']): IndexRange(2,2)}})
+                                'y': {StringList(['ghi','abc']): IndexRange(0,2)}})
 
 if __name__ == "__main__":
     unittest.main()
