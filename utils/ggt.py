@@ -41,8 +41,6 @@ SPV_EXT_relaxed_printf_string_address_space
 
 MODE='new'
 
-OUTPUT_LANGUAGE = 'c'
-
 def convert_min_required_version(version: str | None) -> str:
     """Converts the minimal required SPIR-V version encoded in the grammar to
     the symbol in SPIRV-Tools."""
@@ -565,10 +563,7 @@ def compose_capability_list(caps):
     Returns:
       a string containing the braced list of SpvCapability* or spv::Capability:: enums named by caps.
     """
-    base_string = 'SpvCapability'
-    global OUTPUT_LANGUAGE
-    if OUTPUT_LANGUAGE == 'c++':
-        base_string = 'spv::Capability::'
+    base_string = 'spv::Capability::'
 
     return '{' + ', '.join([(base_string + '{}').format(c) for c in caps]) + '}'
 
@@ -593,9 +588,7 @@ def generate_capability_arrays(caps):
     """
     caps = sorted(set([tuple(c) for c in caps if c]))
     cap_str = 'SpvCapability'
-    global OUTPUT_LANGUAGE
-    if OUTPUT_LANGUAGE == 'c++':
-        cap_str = 'spv::Capability'
+    cap_str = 'spv::Capability'
     arrays = [
         'static const ' + cap_str + ' {}[] = {};'.format(
             get_capability_array_name(c), compose_capability_list(c))
@@ -694,10 +687,7 @@ class InstInitializer(object):
             self.operands.pop()
 
     def __str__(self):
-        global OUTPUT_LANGUAGE
-        base_str = 'SpvOp'
-        if OUTPUT_LANGUAGE == 'c++':
-            base_str = 'spv::Op::Op'
+        base_str = 'spv::Op::Op'
 
         template = ['{{"{opname}"', base_str + '{opname}',
                     '{num_aliases}', '{aliases_mask}',
@@ -1130,12 +1120,8 @@ def generate_capability_to_string_mapping(operand_kinds):
 
     We take care to avoid emitting duplicate values.
     """
-    cap_str = 'SpvCapability'
-    cap_join = ''
-    global OUTPUT_LANGUAGE
-    if OUTPUT_LANGUAGE == 'c++':
-        cap_str = 'spv::Capability'
-        cap_join = '::'
+    cap_str = 'spv::Capability'
+    cap_join = '::'
 
     function = 'const char* CapabilityToString(' + cap_str + ' capability) {\n'
     function += '  switch (capability) {\n'
@@ -1239,10 +1225,6 @@ def main():
                         type=str, required=False, default=None,
                         help='input JSON grammar file for OpenCL extended '
                         'instruction set')
-    parser.add_argument('--output-language',
-                        type=str, required=False, default='c',
-                        choices=['c','c++'],
-                        help='specify output language type')
 
     parser.add_argument('--core-insts-output', metavar='<path>',
                         type=str, required=False, default=None,
@@ -1274,8 +1256,6 @@ def main():
                         help='prefix for operand kinds (to disambiguate operand type enums)')
     args = parser.parse_args()
 
-    global OUTPUT_LANGUAGE
-    OUTPUT_LANGUAGE = args.output_language
 
     # The GN build system needs this because it doesn't handle quoting
     # empty string arguments well.
