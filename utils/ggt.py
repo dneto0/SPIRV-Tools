@@ -205,6 +205,7 @@ struct NameValue {
 // Describes a SPIR-V operand.
 struct OperandDesc {
   uint32_t value;
+  IndexRange operands;      // Indexes kOperandSpans
   IndexRange name;          // Indexes kStrings
   IndexRange aliases;       // Indexes kAliasSpans
   IndexRange capabilities;  // Indexes kCapabilitySpans
@@ -213,7 +214,6 @@ struct OperandDesc {
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
   IndexRange extensions;    // Indexes kExtensionSpans
-  IndexRange operands;      // Indexes kOperandSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
@@ -286,11 +286,11 @@ struct OperandDesc {
                 for o in sorted(operands, key = lambda o: o.value):
                     desc = [
                         o.value,
+                        self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
                         str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
                         self.context.AddStringList('alias', o.aliases),
                         self.context.AddStringList('capability', o.capabilities),
                         self.context.AddStringList('extension', o.extensions),
-                        self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
                         convert_min_required_version(o.version),
                         convert_max_required_version(o.lastVersion),
                     ]
@@ -304,11 +304,11 @@ struct OperandDesc {
         parts.append("""// Operand descriptions, ordered by (operand kind, operand enum value).
 // The fields in order are:
 //   enum value
+//   operands, an IndexRange into kOperandSpans
 //   name, a character-counting IndexRange into kStrings
 //   aliases, an IndexRange into kAliasSpans
 //   capabilities, an IndexRange into kCapabilitySpans
 //   extensions, as an IndexRange into kExtensionSpans
-//   operands, an IndexRange into kOperandSpans
 //   version, first version of SPIR-V that has it
 //   lastVersion, last version of SPIR-V that has it""")
         parts.append("static kOperandsByValue std::array<OperandDesc, {}> = {{".format(len(operands_by_value)))
@@ -344,6 +344,7 @@ struct InstructionDesc {
   const uint32_t value;           // Opcode value
   const bool hasResult;
   const bool hasType;
+  const IndexRange operands;      // Indexes kOperandSpans
   const IndexRange name;          // Indexes kStrings
   const IndexRange aliases;       // Indexes kAliasSpans
   const IndexRange capabilities;  // Indexes kCapbilitySpans
@@ -352,7 +353,6 @@ struct InstructionDesc {
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
   const IndexRange extensions;    // Indexes kExtensionSpans
-  const IndexRange operands;      // Indexes kOperandSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
@@ -378,11 +378,11 @@ struct InstructionDesc {
                 'spv::Op::' + opname,
                 c_bool(hasResult),
                 c_bool(hasType),
+                self.context.AddStringList('operand', operand_kinds),
                 self.context.AddString(opname[2:]),
                 self.context.AddStringList('alias', inst.get('aliases',[])),
                 self.context.AddStringList('capability', inst.get('capabilities',[])),
                 self.context.AddStringList('extension', inst.get('extensions',[])),
-                self.context.AddStringList('operand', operand_kinds),
                 convert_min_required_version(inst.get('version', None)),
                 convert_max_required_version(inst.get('lastVersion', None)),
             ])
@@ -394,11 +394,11 @@ struct InstructionDesc {
 //   opcode
 //   a boolean indicating if the instruction produces a result ID
 //   a boolean indicating if the instruction result ID has a type
+//   operands, an IndexRange into kOperandSpans
 //   opcode name (without the 'Op' prefix), a character-counting IndexRange into kStrings
 //   aliases, an IndexRange into kAliasSpans
 //   capabilities, an IndexRange into kCapabilitySpans
 //   extensions, as an IndexRange into kExtensionSpans
-//   operands, an IndexRange into kOperandSpans
 //   version, first version of SPIR-V that has it
 //   lastVersion, last version of SPIR-V that has it""")
         parts.append("static std::array<InstructionDesc, {}> kInstructionDesc = {{".format(len(lines)));
@@ -1333,11 +1333,6 @@ def main():
         print('\n'.join(g.header_decls))
         print("\n//body")
         print('\n'.join(g.body_decls))
-        print("\n//extension enum")
-        print(g.ExtensionEnumList())
-
-        print("")
-        g.context.dump()
 
         sys.exit(0)
         if args.core_insts_output is not None:
@@ -1351,7 +1346,7 @@ def main():
         if args.extension_enum_output is not None:
             make_path_to_file(args.extension_enum_output)
             with open(args.extension_enum_output, 'w') as f:
-                f.write(generate_extension_enum(extensions))
+                f.write(g.ExtensionEnumList())
         if args.enum_string_mapping_output is not None:
             make_path_to_file(args.enum_string_mapping_output)
             with open(args.enum_string_mapping_output, 'w') as f:
