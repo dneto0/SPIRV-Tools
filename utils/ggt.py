@@ -289,9 +289,10 @@ struct OperandDesc {
                 operands = [Operand(o) for o in operand_kind_json['enumerants']]
                 operand_descs: list[str] = []
                 for o in sorted(operands, key = lambda o: o.value):
+                    suboperands = [convert_operand_kind(p) for p in o.parameters]
                     desc = [
                         o.value,
-                        self.context.AddStringList('operand', [p.get('kind') for p in o.parameters]),
+                        self.context.AddStringList('operand', suboperands),
                         str(self.context.AddString(o.enumerant)) + '/* {} */'.format(o.enumerant),
                         self.context.AddStringList('alias', o.aliases),
                         self.context.AddStringList('capability', o.capabilities),
@@ -486,7 +487,7 @@ struct InstructionDesc {
         for i in range(0, len(ranges)):
             ir = ranges[i]
             name = self.context.GetString(ir)
-            parts.append('  {}, // {} {}'.format(name, i, name))
+            parts.append('  {}, // {}'.format(name, i))
         parts.append('};\n');
         self.body_decls.extend(parts);
 
