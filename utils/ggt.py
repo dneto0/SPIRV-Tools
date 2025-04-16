@@ -130,6 +130,7 @@ def convert_operand_kind(obj: dict[str, str]) -> str:
     return 'SPV_OPERAND_TYPE_{}'.format(
         re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
+
 class Grammar():
     """
     Accumulates string and enum tables.
@@ -153,22 +154,26 @@ class Grammar():
         # Preload the string table
         self.context.AddStringList('extension', extensions)
 
+    def dump(self) -> None:
+        self.context.dump()
+
     def IndexRangeDecls(self) -> str:
         return """
 struct IndexRange {
-  uint32_t first; // index of the first element in the range
-  uint32_t count; // number of elements in the range
+  uint32_t first = 0; // index of the first element in the range
+  uint32_t count = 0; // number of elements in the range
 };
 constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
   return {first, count};
 }
 """
 
-    def dump(self) -> None:
-        self.context.dump()
-
     def ExtensionEnumList(self) -> str:
-        """Returns enumeration containing extensions declared in the grammar."""
+        """
+        Returns the spvtools::Extension enum values, as a string.
+        This is kept separate because it will be included in 'source/extensions.h'
+        which has an otherwise narrow interface.
+        """
         return ',\n'.join(['k' + e for e in self.extensions])
 
     def ComputeOperandTables(self) -> None:
@@ -484,6 +489,15 @@ struct InstructionDesc {
             parts.append('  {}, // {} {}'.format(name, i, name))
         parts.append('};\n');
         self.body_decls.extend(parts);
+
+        parts: list[str] = []
+        parts.append("// Returns the name of an extension, as an index into kStrings")
+        parts.append("IndexRange char* ExtensionToIndexRange(Extension extension) {")
+        for e in self.extensions:
+            parts.append('    case Extension::k{}: return {};'.format(e,self.context.AddString(e)))
+        parts.append('  }\n  return {};\n}\n');
+
+        self.body_decls.extend(parts)
 
 
 def make_path_to_file(f: str) -> None:
