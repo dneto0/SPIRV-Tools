@@ -35,7 +35,6 @@ class IndexRange {
   static_assert(std::is_integral<CountType>::value);
   static_assert(std::is_unsigned<CountType>::value);
   using value_type = T;
-  using span_type = spvtools::utils::Span<T>;
   using index_type = IndexType;
   using size_type = CountType;
 
@@ -49,7 +48,9 @@ class IndexRange {
   IndexType first() const { return first_; }
 
   // Returns the span of indexed elements using the given base pointer.
-  span_type apply(T* base) const {
+  template <typename E>
+  spvtools::utils::Span<E> apply(E* base) const {
+    using span_type = spvtools::utils::Span<E>;
     return base ? span_type(base + first_, count_) : span_type();
   }
 

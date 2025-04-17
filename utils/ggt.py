@@ -208,20 +208,27 @@ struct NameValue {
 // Describes a SPIR-V operand.
 struct OperandDesc {
   uint32_t value;
-  IndexRange operands;      // Indexes kOperandSpans
-  IndexRange name;          // Indexes kStrings
-  IndexRange aliases;       // Indexes kAliasSpans
-  IndexRange capabilities;  // Indexes kCapabilitySpans
+  IndexRange operands_range;      // Indexes kOperandSpans
+  IndexRange name_range;          // Indexes kStrings
+  IndexRange aliases_range;       // Indexes kAliasSpans
+  IndexRange capabilities_range;  // Indexes kCapabilitySpans
   // A set of extensions that enable this feature. If empty then this operand
   // value is in core and its availability is subject to minVersion. The
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
-  IndexRange extensions;    // Indexes kExtensionSpans
+  IndexRange extensions_range;  // Indexes kExtensionSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
   uint32_t minVersion;
   uint32_t lastVersion;
+  utils::Span<spv_operand_type_t> operands() const;
+  utils::Span<char> name() const;
+  utils::Span<IndexRange> aliases() const;
+  utils::Span<spv::Capability> capabilities() const;
+  utils::Span<spvtools::Extension> extensions() const;
+  OperandDesc(const OperandDesc&) = delete;
+  OperandDesc(OperandDesc&&) = delete;
 };
 """)
 
@@ -345,23 +352,30 @@ struct OperandDesc {
 """
 // Describes an Instruction
 struct InstructionDesc {
-  const spv::Op value;            // opcode
+  const spv::Op value;
   const bool hasResult;
   const bool hasType;
-  const IndexRange operands;      // Indexes kOperandSpans
-  const IndexRange name;          // Indexes kStrings
-  const IndexRange aliases;       // Indexes kAliasSpans
-  const IndexRange capabilities;  // Indexes kCapbilitySpans
+  const IndexRange operands_range;      // Indexes kOperandSpans
+  const IndexRange name_range;          // Indexes kStrings
+  const IndexRange aliases_range;       // Indexes kAliasSpans
+  const IndexRange capabilities_range;  // Indexes kCapbilitySpans
   // A set of extensions that enable this feature. If empty then this operand
   // value is in core and its availability is subject to minVersion. The
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
-  const IndexRange extensions;    // Indexes kExtensionSpans
+  const IndexRange extensions_range;    // Indexes kExtensionSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
   uint32_t minVersion;
   uint32_t lastVersion;
+  utils::Span<spv_operand_type_t> operands() const;
+  utils::Span<char> name() const;
+  utils::Span<IndexRange> aliases() const;
+  utils::Span<spv::Capability> capabilities() const;
+  utils::Span<spvtools::Extension> extensions() const;
+  OperandDesc(const OperandDesc&) = delete;
+  OperandDesc(OperandDesc&&) = delete;
 };
 """)
 

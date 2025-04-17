@@ -64,8 +64,13 @@ IndexRange OperandByValueRangeForKind(spv_operand_type_t type);
 // Returns the name of an extension, as an index into kStrings
 IndexRange ExtensionToIndexRange(Extension extension);
 
-
 #include "core_tables.inc"
 
 } // anonymous namespace
+
+const char* getChars(IndexRange ir) {
+  assert(ir.first < sizeof(kStrings));
+  return ir.apply(kStrings).data();
+}
+
 } // namespace spvtools
