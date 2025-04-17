@@ -86,9 +86,8 @@ typedef struct spv_opcode_desc_t {
   // operandTypes[0..numTypes-1] describe logical operands for the instruction.
   // The operand types include result id and result-type id, followed by
   // the types of arguments.
-  const spvtools::util::IndexRange<spv_operand_type_t> operandTypes;
-  //const uint16_t numTypes;
-  //spv_operand_type_t operandTypes[16];  // TODO: Smaller/larger?
+  const uint16_t numTypes;
+  spv_operand_type_t operandTypes[16];  // TODO: Smaller/larger?
   const bool hasResult;  // Does the instruction have a result ID operand?
   const bool hasType;    // Does the instruction have a type ID operand?
   // A set of extensions that enable this feature. If empty then this operand
@@ -175,10 +174,6 @@ struct spv_context_t {
   const spv_operand_table operand_table;
   const spv_ext_inst_table ext_inst_table;
   spvtools::MessageConsumer consumer;
-
-  // Returns a span of elements of type T, from the static global table
-  // derived from the SPIR-V grammar.
-  template<class T> spvtools::util::Span<T> get(spvtools::util::IndexRange<T> ir);
 };
 
 namespace spvtools {
