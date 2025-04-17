@@ -81,6 +81,10 @@ const char* getChars(IndexRange ir) {
   return ir.apply(kStrings).data();
 }
 
+utils::Span<const char> OperandDesc::name() const {
+  return name_range.apply(kStrings);
+}
+
 spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
                            OperandDesc* desc) {
   auto ir = OperandByValueRangeForKind(type);

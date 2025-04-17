@@ -111,7 +111,7 @@ struct OperandDesc {
   uint32_t minVersion;
   uint32_t lastVersion;
   utils::Span<spv_operand_type_t> operands() const;
-  utils::Span<char> name() const;
+  utils::Span<const char> name() const;
   utils::Span<IndexRange> aliases() const;
   utils::Span<spv::Capability> capabilities() const;
   utils::Span<spvtools::Extension> extensions() const;
@@ -143,7 +143,7 @@ struct InstructionDesc {
   // Returns the span of elements in the global grammar tables corresponding
   // to the privately-stored index ranges
   utils::Span<spv_operand_type_t> operands() const;
-  utils::Span<char> name() const;
+  utils::Span<const char> name() const;
   utils::Span<IndexRange> aliases() const;
   utils::Span<spv::Capability> capabilities() const;
   utils::Span<spvtools::Extension> extensions() const;
