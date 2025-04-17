@@ -118,7 +118,7 @@ class Context():
         entry: dict[StringList, IndexRange] = self.ranges.get(kind, {})
         if kind not in self.ranges:
             self.ranges[kind] = entry
-            self.range_buffer[kind]: list[IndexRange] = []
+            self.range_buffer[kind] = []
 
         if l in entry:
             return entry[l]
