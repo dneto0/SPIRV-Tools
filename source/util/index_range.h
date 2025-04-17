@@ -39,12 +39,12 @@ class IndexRange {
   using index_type = IndexType;
   using size_type = CountType;
 
-  IndexRange() {}
-  IndexRange(index_type first, size_type count)
+  constexpr IndexRange() {}
+  constexpr IndexRange(index_type first, size_type count)
       : first_(first), count_(count) {}
 
-  size_type size() const { return count_; }
-  bool empty() const { return size() == size_type(0); }
+  size_type count() const { return count_; }
+  bool empty() const { return count() == size_type(0); }
 
   IndexType first() const { return first_; }
 
