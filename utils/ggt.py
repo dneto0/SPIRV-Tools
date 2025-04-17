@@ -277,13 +277,14 @@ struct OperandDesc {
         parts.append("""// Maps an operand kind to possible names for operands of that kind.
 // The result is an IndexRange into kOperandNames, and the names
 // are sorted by name within that span.""")
-        parts = ["static IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
+        parts = ["IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
         for kind, ir in name_range_for_kind.items():
             parts.append("    case {}: return {};".format(
                 ctype_for[kind],
                 str(name_range_for_kind[kind])))
         parts.append("    default: break;");
         parts.append("  }\n  return IR(0,0);\n}")
+        self.body_decls.extend(parts)
 
         # Populate kOperandsByValue
         operands_by_value: list[str] = []

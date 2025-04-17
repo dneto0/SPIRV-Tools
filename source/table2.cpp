@@ -59,6 +59,11 @@ namespace {
 //      Array of operand types, referenced by IndexRanges elsewhere.
 //      Contains all sequences of operand types used in the grammar.
 
+// Maps an operand kind to a NameValue entries for that kind.
+// The result is an IndexRange into kOperandNames, and are sorted
+// are sorted by string name within that span.
+IndexRange OperandNameRangeForKind(spv_operand_type_t type);
+
 // Maps an operand kind to possible operands for that kind.
 // The result is an IndexRange into kOperandsByValue, and the operands
 // are sorted by value within that span.
@@ -96,6 +101,32 @@ spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
   if (where != span.end() && where->value == value) {
     desc = &*where;
     return SPV_SUCCESS;
+  }
+  return SPV_ERROR_INVALID_VALUE;
+}
+
+spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
+                           size_t name_len, OperandDesc* desc) {
+  auto ir = OperandNameRangeForKind(type);
+  if (ir.empty()) {
+    return SPV_ERROR_INVALID_VALUE;
+  }
+
+  auto span = ir.apply(kOperandNames.data());
+
+  // The comparison function knows to use (name, name_len) as the
+  // string to compare against.
+  const auto kSentinel = uint32_t(-1);
+  const NameValue needle{{}, kSentinel};
+  auto compare = [name](const NameValue& lhs, const NameValue& rhs) {
+    const char* lhs_chars = lhs.value == kSentinel ? name : getChars(lhs.name);
+    const char* rhs_chars = rhs.value == kSentinel ? name : getChars(rhs.name);
+    return std::strcmp(lhs_chars, rhs_chars) < 0;
+  };
+
+  auto where = std::lower_bound(span.begin(), span.end(), needle, compare);
+  if (where != span.end() && std::strcmp(getChars(where->name), name) == 0) {
+    return LookupOperand(type, where->value, desc);
   }
   return SPV_ERROR_INVALID_VALUE;
 }
