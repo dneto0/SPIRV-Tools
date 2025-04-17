@@ -110,11 +110,11 @@ struct OperandDesc {
   // extension lists means only available in extensions.
   uint32_t minVersion;
   uint32_t lastVersion;
-  utils::Span<spv_operand_type_t> operands() const;
+  utils::Span<const spv_operand_type_t> operands() const;
   utils::Span<const char> name() const;
-  utils::Span<IndexRange> aliases() const;
-  utils::Span<spv::Capability> capabilities() const;
-  utils::Span<spvtools::Extension> extensions() const;
+  utils::Span<const IndexRange> aliases() const;
+  utils::Span<const spv::Capability> capabilities() const;
+  utils::Span<const spvtools::Extension> extensions() const;
 
   OperandDesc(const OperandDesc&) = delete;
   OperandDesc(OperandDesc&&) = delete;
@@ -142,11 +142,11 @@ struct InstructionDesc {
   uint32_t lastVersion;
   // Returns the span of elements in the global grammar tables corresponding
   // to the privately-stored index ranges
-  utils::Span<spv_operand_type_t> operands() const;
+  utils::Span<const spv_operand_type_t> operands() const;
   utils::Span<const char> name() const;
-  utils::Span<IndexRange> aliases() const;
-  utils::Span<spv::Capability> capabilities() const;
-  utils::Span<spvtools::Extension> extensions() const;
+  utils::Span<const IndexRange> aliases() const;
+  utils::Span<const spv::Capability> capabilities() const;
+  utils::Span<const spvtools::Extension> extensions() const;
 
   InstructionDesc(const InstructionDesc&) = delete;
   InstructionDesc(InstructionDesc&&) = delete;

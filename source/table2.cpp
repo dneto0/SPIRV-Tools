@@ -81,8 +81,36 @@ const char* getChars(IndexRange ir) {
   return ir.apply(kStrings).data();
 }
 
+utils::Span<const spv_operand_type_t> OperandDesc::operands() const {
+  return operands_range.apply(kOperandSpans);
+}
 utils::Span<const char> OperandDesc::name() const {
   return name_range.apply(kStrings);
+}
+utils::Span<const IndexRange> OperandDesc::aliases() const {
+  return name_range.apply(kAliasSpans);
+}
+utils::Span<const spv::Capability> OperandDesc::capabilities() const {
+  return capabilities_range.apply(kCapabilitySpans);
+}
+utils::Span<const spvtools::Extension> OperandDesc::extensions() const {
+  return extensions_range.apply(kExtensionSpans);
+}
+
+utils::Span<const spv_operand_type_t> InstructionDesc::operands() const {
+  return operands_range.apply(kOperandSpans);
+}
+utils::Span<const char> InstructionDesc::name() const {
+  return name_range.apply(kStrings);
+}
+utils::Span<const IndexRange> InstructionDesc::aliases() const {
+  return name_range.apply(kAliasSpans);
+}
+utils::Span<const spv::Capability> InstructionDesc::capabilities() const {
+  return capabilities_range.apply(kCapabilitySpans);
+}
+utils::Span<const spvtools::Extension> InstructionDesc::extensions() const {
+  return extensions_range.apply(kExtensionSpans);
 }
 
 spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
