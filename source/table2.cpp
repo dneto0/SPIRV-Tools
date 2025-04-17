@@ -20,6 +20,52 @@
 #include "spirv-tools/libspirv.hpp"
 
 namespace spvtools {
+namespace {
+
+// The generated include file contains variables:
+//
+//   std::array<NameValue,...> kOperandNames:
+//      Operand names and values, ordered by (operand kind, name)
+//
+//   std::array<OperandDesc, ...> kOperandsByValue:
+//      Operand descriptions, ordered by (operand kind, operand enum value).
+//
+//   std::array<InstructionDesc, ...> kInstructionDesc
+//      Instruction descriptions, ordered by opcode.
+//
+//   const char kStrings[]
+//      Array of characters, referenced by IndexRanges elsewhere.
+//      Each IndexRange denotes a string.
+//
+//   const IndexRange kAliasSpans[]
+//      Array of IndexRanges, where each represents a string by referencing
+//      the kStrings table.
+//      This array contains all sequences of alias strings used in the grammar.
+//      This table is referenced by an IndexRange elsewhere, i.e. by the 'aliases'
+//      field of an instruction or operand description.
+//
+//   const spv::Capability kCapabilitySpans[]
+//      Array of capabilities, referenced by IndexRanges elsewhere.
+//      Contains all sequences of capabilities used in the grammar.
+//
+//   const spvtools::Extension kExtensionSpans[] = {
+//      Array of extensions, referenced by IndexRanges elsewhere.
+//      Contains all sequences of extensions used in the grammar.
+//
+//   const spv_operand_type_t kOperandSpans[] = {
+//      Array of operand types, referenced by IndexRanges elsewhere.
+//      Contains all sequences of operand types used in the grammar.
+
+// Maps an operand kind to possible operands for that kind.
+// The result is an IndexRange into kOperandsByValue, and the operands
+// are sorted by value within that span.
+IndexRange OperandByValueRangeForKind(spv_operand_type_t type);
+
+// Returns the name of an extension, as an index into kStrings
+IndexRange ExtensionToIndexRange(Extension extension);
+
 
 #include "core_tables.inc"
-}
+
+} // anonymous namespace
+} // namespace spvtools
