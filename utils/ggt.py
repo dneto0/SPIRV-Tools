@@ -1226,6 +1226,9 @@ def main():
                         help='input JSON grammar file for OpenCL extended '
                         'instruction set')
 
+    parser.add_argument('--core-tables-output', metavar='<path>',
+                        type=str, required=False, default=None,
+                        help='output file for core SPIR-V grammar tables')
     parser.add_argument('--core-insts-output', metavar='<path>',
                         type=str, required=False, default=None,
                         help='output file for core SPIR-V instructions')
@@ -1290,6 +1293,7 @@ def main():
               '--extinst-vendor-grammar should be specified together.')
         exit(1)
     if all([args.core_insts_output is None,
+            args.core_tables_output is None,
             args.glsl_insts_output is None,
             args.opencl_insts_output is None,
             args.vendor_insts_output is None,
@@ -1324,10 +1328,11 @@ def main():
         g.ComputeOperandTables()
         g.ComputeInstructionTable(core_grammar['instructions'])
         g.ComputeLeafTables()
-        print("//headers")
-        print('\n'.join(g.header_decls))
-        print("\n//body")
-        print('\n'.join(g.body_decls))
+
+        if args.core_tables_output is not None:
+            make_path_to_file(args.core_tables_output)
+            with open(args.core_tables_output, 'w') as f:
+                f.write('\n'.join(g.body_decls))
 
         sys.exit(0)
         if args.core_insts_output is not None:
