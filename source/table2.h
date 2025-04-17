@@ -156,5 +156,10 @@ struct InstructionDesc {
 // index range is valid.
 const char* getChars(IndexRange);
 
+spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
+                           size_t name_len, OperandDesc* desc);
+spv_result_t LookupOperand(spv_operand_type_t type, uint32_t operand,
+                           OperandDesc* desc);
+
 }  // namespace spvtools
 #endif  // SOURCE_TABLE2_H_

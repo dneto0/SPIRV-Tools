@@ -1,5 +1,6 @@
 // Copyright (c) 2025 Google LLC
 //
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -13,6 +14,8 @@
 // limitations under the License.
 
 #include "source/table2.h"
+
+#include <algorithm>
 
 #include "source/extensions.h"
 #include "source/latest_version_spirv_header.h"
@@ -71,6 +74,30 @@ IndexRange ExtensionToIndexRange(Extension extension);
 const char* getChars(IndexRange ir) {
   assert(ir.first < sizeof(kStrings));
   return ir.apply(kStrings).data();
+}
+
+spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
+                           OperandDesc* desc) {
+  auto ir = OperandByValueRangeForKind(type);
+  if (ir.empty()) {
+    return SPV_ERROR_INVALID_VALUE;
+  }
+
+  auto span = ir.apply(kOperandsByValue.data());
+
+  // Metaphor: Look for the needle in the haystack.
+  // The operand value is the first member.
+  const OperandDesc needle{value};
+  auto where =
+      std::lower_bound(span.begin(), span.end(), needle,
+                       [&](const OperandDesc& lhs, const OperandDesc& rhs) {
+                         return lhs.value < rhs.value;
+                       });
+  if (where != span.end() && where->value == value) {
+    desc = &*where;
+    return SPV_SUCCESS;
+  }
+  return SPV_ERROR_INVALID_VALUE;
 }
 
 } // namespace spvtools
