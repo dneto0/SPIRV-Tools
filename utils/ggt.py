@@ -262,9 +262,9 @@ struct OperandDesc {
 // The fields in order are:
 //   name, either the primary name or an alias, indexing into kStrings
 //   enum value""")
-        parts.append("static kOperandNames std::array<NameValue, {}> = {{".format(len(operand_name_strings)))
+        parts.append("static std::array<NameValue, {}> kOperandNames{{{{".format(len(operand_name_strings)))
         parts.extend(['  ' + str(x) for x in operand_name_strings])
-        parts.append("};\n")
+        parts.append("}};\n")
         self.body_decls.extend(parts)
 
         parts.append("""// Maps an operand kind to possible names for operands of that kind.
@@ -315,9 +315,9 @@ struct OperandDesc {
 //   extensions, as an IndexRange into kExtensionSpans
 //   version, first version of SPIR-V that has it
 //   lastVersion, last version of SPIR-V that has it""")
-        parts.append("static kOperandsByValue std::array<OperandDesc, {}> = {{".format(len(operands_by_value)))
+        parts.append("static std::array<OperandDesc, {}> kOperandsByValue{{{{".format(len(operands_by_value)))
         parts.extend(['  ' + str(x) for x in operands_by_value])
-        parts.append("};\n")
+        parts.append("}};\n")
         self.body_decls.extend(parts)
 
         parts = []
@@ -345,7 +345,7 @@ struct OperandDesc {
 """
 // Describes an Instruction
 struct InstructionDesc {
-  const uint32_t value;           // Opcode value
+  const spv::Op value;            // opcode
   const bool hasResult;
   const bool hasType;
   const IndexRange operands;      // Indexes kOperandSpans
@@ -405,9 +405,9 @@ struct InstructionDesc {
 //   extensions, as an IndexRange into kExtensionSpans
 //   version, first version of SPIR-V that has it
 //   lastVersion, last version of SPIR-V that has it""")
-        parts.append("static std::array<InstructionDesc, {}> kInstructionDesc = {{".format(len(lines)));
+        parts.append("static std::array<InstructionDesc, {}> kInstructionDesc{{{{".format(len(lines)));
         parts.extend(['  ' + l for l in lines])
-        parts.append("};\n");
+        parts.append("}};\n");
         self.body_decls.extend(parts)
 
 
@@ -491,9 +491,10 @@ struct InstructionDesc {
 
         parts: list[str] = []
         parts.append("// Returns the name of an extension, as an index into kStrings")
-        parts.append("IndexRange char* ExtensionToIndexRange(Extension extension) {")
+        parts.append("IndexRange ExtensionToIndexRange(Extension extension) {\n  switch(extension) {")
         for e in self.extensions:
             parts.append('    case Extension::k{}: return {};'.format(e,self.context.AddString(e)))
+        parts.append("    default: break;");
         parts.append('  }\n  return {};\n}\n');
 
         self.body_decls.extend(parts)

@@ -14,4 +14,12 @@
 
 #include "source/table2.h"
 
-#include <utility>
+#include "source/extensions.h"
+#include "source/latest_version_spirv_header.h"
+#include "source/spirv_constant.h"
+#include "spirv-tools/libspirv.hpp"
+
+namespace spvtools {
+
+#include "core_tables.inc"
+}

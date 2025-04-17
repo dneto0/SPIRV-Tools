@@ -79,8 +79,9 @@
 namespace spvtools {
 
 using IndexRange = utils::IndexRange<uint32_t, uint32_t>;
+
 constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
-  return {first, count};
+  return IndexRange{first, count};
 }
 
 struct NameValue {
@@ -111,7 +112,7 @@ struct OperandDesc {
 
 // Describes an Instruction
 struct InstructionDesc {
-  const uint32_t value;  // Opcode value
+  const spv::Op value;            // opcode
   const bool hasResult;
   const bool hasType;
   const IndexRange operands;      // Indexes kOperandSpans
