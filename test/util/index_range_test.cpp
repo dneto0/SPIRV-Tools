@@ -35,17 +35,17 @@ TEST(IndexRangeTest, Initialize_Default) {
 
   auto span_null = ir.apply(nullptr);
   EXPECT_EQ(span_null.data(), nullptr);
-  EXPECT_EQ(span_null.count(), 0);
+  EXPECT_EQ(span_null.size(), 0);
   EXPECT_TRUE(span_null.empty());
 
   auto span_a = ir.apply(&sentinel_a);
   EXPECT_EQ(span_a.data(), &sentinel_a);
-  EXPECT_EQ(span_a.count(), 0);
+  EXPECT_EQ(span_a.size(), 0);
   EXPECT_TRUE(span_a.empty());
 
   auto span_b = ir.apply(&sentinel_b);
   EXPECT_EQ(span_b.data(), &sentinel_b);
-  EXPECT_EQ(span_b.count(), 0);
+  EXPECT_EQ(span_b.size(), 0);
   EXPECT_TRUE(span_b.empty());
 }
 
@@ -58,7 +58,7 @@ TEST(IndexRangeTest, Initialize_NonEmpty) {
 
   auto span_null = ir.apply(nullptr);
   EXPECT_EQ(span_null.data(), nullptr);
-  EXPECT_EQ(span_null.count(), 0);
+  EXPECT_EQ(span_null.size(), 0);
   EXPECT_TRUE(span_null.empty());
 
   double arr[] = {0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0};
