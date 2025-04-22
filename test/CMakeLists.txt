@@ -117,6 +117,7 @@ set(TEST_SOURCES
   named_id_test.cpp
   name_mapper_test.cpp
   op_unknown_test.cpp
+  opcode_lookup_test.cpp
   opcode_make_test.cpp
   opcode_require_capabilities_test.cpp
   opcode_split_test.cpp

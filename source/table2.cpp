@@ -20,6 +20,7 @@
 #include "source/extensions.h"
 #include "source/latest_version_spirv_header.h"
 #include "source/spirv_constant.h"
+#include "source/spirv_target_env.h"
 #include "spirv-tools/libspirv.hpp"
 
 namespace spvtools {
@@ -82,7 +83,7 @@ IndexRange ExtensionToIndexRange(Extension extension);
 } // anonymous namespace
 
 const char* getChars(IndexRange ir) {
-  assert(ir.first < sizeof(kStrings));
+  assert(ir.first() < sizeof(kStrings));
   return ir.apply(kStrings).data();
 }
 
@@ -131,7 +132,7 @@ spv_result_t LookupOpcode(spv::Op opcode, InstructionDesc** desc) {
     *desc = &*where;
     return SPV_SUCCESS;
   }
-  return SPV_ERROR_INVALID_VALUE;
+  return SPV_ERROR_INVALID_LOOKUP;
 }
 
 spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
@@ -149,14 +150,31 @@ spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
   if (where != kInstructionNames.end() && std::strcmp(getChars(where->name), name) == 0) {
     return LookupOpcode(static_cast<spv::Op>(where->value), desc);
   }
-  return SPV_ERROR_INVALID_VALUE;
+  return SPV_ERROR_INVALID_LOOKUP;
+}
+
+spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name, InstructionDesc** desc) {
+  InstructionDesc* desc_proxy;
+  auto status = LookupOpcode(name, &desc_proxy);
+  if (status != SPV_SUCCESS) {
+    return status;
+  }
+  auto& entry = *desc_proxy;
+  const auto version = spvVersionForTargetEnv(env); 
+  if ((version >= entry.minVersion && version <= entry.lastVersion)
+      || entry.extensions_range.count() > 0
+      || entry.capabilities_range.count() > 0) {
+    *desc = desc_proxy;
+    return SPV_SUCCESS;
+  }
+  return SPV_ERROR_INVALID_LOOKUP;
 }
 
 spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
                            OperandDesc** desc) {
   auto ir = OperandByValueRangeForKind(type);
   if (ir.empty()) {
-    return SPV_ERROR_INVALID_VALUE;
+    return SPV_ERROR_INVALID_LOOKUP;
   }
 
   auto span = ir.apply(kOperandsByValue.data());
@@ -173,14 +191,14 @@ spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
     *desc = &*where;
     return SPV_SUCCESS;
   }
-  return SPV_ERROR_INVALID_VALUE;
+  return SPV_ERROR_INVALID_LOOKUP;
 }
 
 spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
                            size_t name_len, OperandDesc** desc) {
   auto ir = OperandNameRangeForKind(type);
   if (ir.empty()) {
-    return SPV_ERROR_INVALID_VALUE;
+    return SPV_ERROR_INVALID_LOOKUP;
   }
 
   auto span = ir.apply(kOperandNames.data());
@@ -199,7 +217,7 @@ spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
   if (where != span.end() && std::strcmp(getChars(where->name), name) == 0) {
     return LookupOperand(type, where->value, desc);
   }
-  return SPV_ERROR_INVALID_VALUE;
+  return SPV_ERROR_INVALID_LOOKUP;
 }
 
 } // namespace spvtools

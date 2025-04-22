@@ -387,7 +387,7 @@ struct InstructionDesc {
         for i in insts:
             name_value_pairs.append((i['opname'][2:], i['opcode']))
             for a in i.get('aliases',[]):
-                name_value_pairs.append((a, i['opcode']))
+                name_value_pairs.append((a[2:], i['opcode']))
         name_value_pairs = sorted(name_value_pairs)
         inst_name_strings: list[str] = []
         for i in range(0, len(name_value_pairs)):

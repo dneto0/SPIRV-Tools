@@ -38,6 +38,7 @@
 #include "source/spirv_constant.h"
 #include "source/spirv_target_env.h"
 #include "source/table.h"
+#include "source/table2.h"
 #include "source/text_handler.h"
 #include "source/util/bitutils.h"
 #include "source/util/parse_number.h"
@@ -705,8 +706,8 @@ spv_result_t spvTextEncodeOpcode(const spvtools::AssemblyGrammar& grammar,
   // NOTE: The table contains Opcode names without the "Op" prefix.
   const char* pInstName = opcodeName.data() + 2;
 
-  spv_opcode_desc opcodeEntry;
-  error = grammar.lookupOpcode(pInstName, &opcodeEntry);
+  spvtools::InstructionDesc* opcodeEntry = nullptr;
+  error = LookupOpcodeForEnv(grammar.target_env(), pInstName, &opcodeEntry);
   if (error) {
     return context->diagnostic(error)
            << "Invalid Opcode name '" << opcodeName << "'";
@@ -734,10 +735,14 @@ spv_result_t spvTextEncodeOpcode(const spvtools::AssemblyGrammar& grammar,
   // ExecutionMode), or for extended instructions that may have their
   // own operands depending on the selected extended instruction.
   spv_operand_pattern_t expectedOperands;
-  expectedOperands.reserve(opcodeEntry->numTypes);
-  for (auto i = 0; i < opcodeEntry->numTypes; i++)
-    expectedOperands.push_back(
-        opcodeEntry->operandTypes[opcodeEntry->numTypes - i - 1]);
+  {
+    const auto operands = opcodeEntry->operands();
+    const auto n = operands.size();
+    expectedOperands.reserve(n);
+    for (auto i = 0; i < n; i++) {
+      expectedOperands.push_back(operands[n - i - 1]);
+    }
+  }
 
   while (!expectedOperands.empty()) {
     const spv_operand_type_t type = expectedOperands.back();
