@@ -342,9 +342,10 @@ struct OperandDesc {
         self.body_decls.extend(parts)
 
 
-    def ComputeInstructionTable(self, insts) -> None:
+    def ComputeInstructionTables(self, insts) -> None:
         """
-        Returns the C++ declaration for the table for the given instructions.
+        Creates declarations for instruction tables.
+        Populates self.header_decls, self.body_decls.
 
         Params:
             insts: an array of instructions objects using the JSON schema
@@ -380,8 +381,28 @@ struct InstructionDesc {
 };
 """)
 
-        # Preload the string list with opcodes, without the 'Op' prefix.
-        self.context.AddStringList('opcode', sorted([i['opname'][2:] for i in insts]))
+        # Create the sorted list of opcode strings, without the 'Op' prefix.
+        opcode_name_entries: list[str] = []
+        name_value_pairs: list[tuple[str,int]] = []
+        for i in insts:
+            name_value_pairs.append((i['opname'][2:], i['opcode']))
+            for a in i.get('aliases',[]):
+                name_value_pairs.append((a, i['opcode']))
+        name_value_pairs = sorted(name_value_pairs)
+        inst_name_strings: list[str] = []
+        for i in range(0, len(name_value_pairs)):
+            name, value = name_value_pairs[i]
+            ir = self.context.AddString(name)
+            inst_name_strings.append('{{{}, {}}}, // {} {}'.format(str(ir),value,i,name))
+        parts: list[str] = []
+        parts.append("""// Opcode strings (without the 'Op' prefix) and opcode values, ordered by name.
+// The fields in order are:
+//   name, either the primary name or an alias, indexing into kStrings
+//   opcode value""")
+        parts.append("std::array<NameValue, {}> kInstructionNames{{{{".format(len(inst_name_strings)))
+        parts.extend(['  ' + str(x) for x in inst_name_strings])
+        parts.append("}};\n")
+        self.body_decls.extend(parts)
 
         lines: list[str] = []
         for inst in insts:
@@ -407,7 +428,7 @@ struct InstructionDesc {
             ])
 
             lines.append('{{{}}},'.format(', '.join([str(x) for x in parts])))
-        parts: list[str] = []
+        parts = []
         parts.append("""// Instruction descriptions, ordered by opcode.
 // The fields in order are:
 //   opcode
@@ -1342,7 +1363,7 @@ def main():
         g = Grammar(extensions, operand_kinds)
 
         g.ComputeOperandTables()
-        g.ComputeInstructionTable(core_grammar['instructions'])
+        g.ComputeInstructionTables(core_grammar['instructions'])
         g.ComputeLeafTables()
 
         if args.core_tables_output is not None:

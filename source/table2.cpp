@@ -29,9 +29,14 @@ namespace {
 //
 //   std::array<NameValue,...> kOperandNames:
 //      Operand names and values, ordered by (operand kind, name)
+//      Aliases are included as their own entries.
 //
 //   std::array<OperandDesc, ...> kOperandsByValue:
 //      Operand descriptions, ordered by (operand kind, operand enum value).
+//
+//   std::array<NameValue,...> kInstructionNames:
+//      Instruction names and opcode values, ordered by (name, value)
+//      Aliases are included as their own entries.
 //
 //   std::array<InstructionDesc, ...> kInstructionDesc
 //      Instruction descriptions, ordered by opcode.
@@ -113,8 +118,42 @@ utils::Span<const spvtools::Extension> InstructionDesc::extensions() const {
   return extensions_range.apply(kExtensionSpans);
 }
 
+spv_result_t LookupOpcode(spv::Op opcode, InstructionDesc** desc) {
+  // Metaphor: Look for the needle in the haystack.
+  // The operand value is the first member.
+  const InstructionDesc needle{opcode};
+  auto where =
+      std::lower_bound(kInstructionDesc.begin(), kInstructionDesc.end(), needle,
+                       [&](const InstructionDesc& lhs, const InstructionDesc& rhs) {
+                         return uint32_t(lhs.opcode) < uint32_t(rhs.opcode);
+                       });
+  if (where != kInstructionDesc.end() && where->opcode == opcode) {
+    *desc = &*where;
+    return SPV_SUCCESS;
+  }
+  return SPV_ERROR_INVALID_VALUE;
+}
+
+spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
+  // The comparison function knows to use 'name' string to compare against
+  // when the value is kSentinel.
+  const auto kSentinel = uint32_t(-1);
+  const NameValue needle{{}, kSentinel};
+  auto compare = [name](const NameValue& lhs, const NameValue& rhs) {
+    const char* lhs_chars = lhs.value == kSentinel ? name : getChars(lhs.name);
+    const char* rhs_chars = rhs.value == kSentinel ? name : getChars(rhs.name);
+    return std::strcmp(lhs_chars, rhs_chars) < 0;
+  };
+
+  auto where = std::lower_bound(kInstructionNames.begin(), kInstructionNames.end(), needle, compare);
+  if (where != kInstructionNames.end() && std::strcmp(getChars(where->name), name) == 0) {
+    return LookupOpcode(static_cast<spv::Op>(where->value), desc);
+  }
+  return SPV_ERROR_INVALID_VALUE;
+}
+
 spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
-                           OperandDesc* desc) {
+                           OperandDesc** desc) {
   auto ir = OperandByValueRangeForKind(type);
   if (ir.empty()) {
     return SPV_ERROR_INVALID_VALUE;
@@ -131,14 +170,14 @@ spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,
                          return lhs.value < rhs.value;
                        });
   if (where != span.end() && where->value == value) {
-    desc = &*where;
+    *desc = &*where;
     return SPV_SUCCESS;
   }
   return SPV_ERROR_INVALID_VALUE;
 }
 
 spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
-                           size_t name_len, OperandDesc* desc) {
+                           size_t name_len, OperandDesc** desc) {
   auto ir = OperandNameRangeForKind(type);
   if (ir.empty()) {
     return SPV_ERROR_INVALID_VALUE;
@@ -147,7 +186,7 @@ spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
   auto span = ir.apply(kOperandNames.data());
 
   // The comparison function knows to use (name, name_len) as the
-  // string to compare against.
+  // string to compare against when the value is kSentinel.
   const auto kSentinel = uint32_t(-1);
   const NameValue needle{{}, kSentinel};
   auto compare = [name](const NameValue& lhs, const NameValue& rhs) {
