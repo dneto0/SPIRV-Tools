@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "source/assembly_grammar.h"
 #include "source/binary.h"
@@ -706,8 +707,17 @@ spv_result_t spvTextEncodeOpcode(const spvtools::AssemblyGrammar& grammar,
   // NOTE: The table contains Opcode names without the "Op" prefix.
   const char* pInstName = opcodeName.data() + 2;
 
+  std::cout << "opcode: '" << opcodeName << "'" <<std::endl;
+  std::cout << "pInstName: '" << pInstName << "'" <<std::endl;
+
+#define USE_OLD 0
+#if USE_OLD
+  spv_opcode_desc opcodeEntry;
+  error = grammar.lookupOpcode(pInstName, &opcodeEntry);
+#else
   spvtools::InstructionDesc* opcodeEntry = nullptr;
   error = LookupOpcodeForEnv(grammar.target_env(), pInstName, &opcodeEntry);
+#endif
   if (error) {
     return context->diagnostic(error)
            << "Invalid Opcode name '" << opcodeName << "'";
@@ -735,14 +745,26 @@ spv_result_t spvTextEncodeOpcode(const spvtools::AssemblyGrammar& grammar,
   // ExecutionMode), or for extended instructions that may have their
   // own operands depending on the selected extended instruction.
   spv_operand_pattern_t expectedOperands;
+#if USE_OLD
+  {
+    for (auto i = 0; i < opcodeEntry->numTypes; i++) {
+      auto ty = opcodeEntry->operandTypes[opcodeEntry->numTypes -i - 1];
+      std::cout << "old: ty[" << i << "]" << int(ty) << std::endl;
+      expectedOperands.push_back(ty);
+    }
+  }
+#else
   {
     const auto operands = opcodeEntry->operands();
     const auto n = operands.size();
     expectedOperands.reserve(n);
     for (auto i = 0; i < n; i++) {
-      expectedOperands.push_back(operands[n - i - 1]);
+      auto ty = operands[n - i - 1];
+      expectedOperands.push_back(ty);
+      std::cout << "old: ty[" << i << "]" << int(ty) << std::endl;
     }
   }
+#endif
 
   while (!expectedOperands.empty()) {
     const spv_operand_type_t type = expectedOperands.back();
