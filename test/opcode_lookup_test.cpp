@@ -19,6 +19,7 @@
 #include "source/table2.h"
 #include "test/unit_spirv.h"
 
+using ::testing::ContainerEq;
 using ::testing::ValuesIn;
 
 namespace spvtools {
@@ -105,6 +106,30 @@ INSTANTIATE_TEST_SUITE_P(Samples, OpcodeLookupEnvTest,
                              {"FPGARegINTEL", 5949},
                              {"SubgroupMatrixMultiplyAccumulateINTEL", 6237},
                          }));
+
+TEST(OpcodeLookupExtInstTest, Operands) {
+  // The SPIR-V spec grammar has a single rule for OpExtInst, where the last
+  // item is "sequence of Ids".  SPIRV-Tools handles it differently. It drops
+  // that last item, and instead specifies those operands as operands of the
+  // extended instruction enum, such as 'cos'.
+  // See https://github.com/KhronosGroup/SPIRV-Tools/issues/233
+  // Test the exact sequence of operand types extracted for OpExtInst.
+  InstructionDesc* desc = nullptr;
+  auto status = LookupOpcode("ExtInst", &desc);
+  EXPECT_EQ(status, SPV_SUCCESS);
+  ASSERT_NE(desc, nullptr);
+
+  EXPECT_EQ(desc->operands_range.count(), 4u);
+
+  auto operands = desc->operands();
+  using vtype = std::vector<spv_operand_type_t>;
+
+  EXPECT_THAT(
+      vtype(operands.begin(), operands.end()),
+      ContainerEq(vtype{SPV_OPERAND_TYPE_TYPE_ID, SPV_OPERAND_TYPE_RESULT_ID,
+                        SPV_OPERAND_TYPE_ID,
+                        SPV_OPERAND_TYPE_EXTENSION_INSTRUCTION_NUMBER}));
+}
 
 }  // namespace
 }  // namespace spvtools

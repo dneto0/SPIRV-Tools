@@ -404,6 +404,7 @@ struct InstructionDesc {
         parts.append("}};\n")
         self.body_decls.extend(parts)
 
+        # Create the array of InstructionDesc
         lines: list[str] = []
         for inst in insts:
             parts: list[str] = []
@@ -411,6 +412,14 @@ struct InstructionDesc {
             opname: str = inst['opname']
 
             operand_kinds = [convert_operand_kind(o) for o in inst.get('operands',[])]
+            if opname == 'OpExtInst' and operand_kinds[-1] == 'SPV_OPERAND_TYPE_VARIABLE_ID':
+                # The published grammar uses 'sequence of ID' at the
+                # end of the ExtInst operands. But SPIRV-Tools uses
+                # a specific pattern based on the particular opcode.
+                # Drop it here.
+                # See https://github.com/KhronosGroup/SPIRV-Tools/issues/233
+                operand_kinds.pop()
+
             hasResult = 'SPV_OPERAND_TYPE_RESULT_ID' in operand_kinds
             hasType = 'SPV_OPERAND_TYPE_TYPE_ID' in operand_kinds
 
