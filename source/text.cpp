@@ -504,7 +504,7 @@ spv_result_t encodeInstructionStartingWithImmediate(
     if (operandValue == "=")
       return context->diagnostic() << firstWord << " not allowed before =.";
 
-    // Needed to pass to spvTextEncodeOpcode(), but it shouldn't ever be
+    // Needed to pass to spvTextEncodeOperand(), but it shouldn't ever be
     // expanded.
     spv_operand_pattern_t dummyExpectedOperands;
     error = spvTextEncodeOperand(
@@ -621,7 +621,7 @@ spv_result_t encodeInstructionStartingWithOpUnknown(
     if (operandValue == "=")
       return context->diagnostic() << "OpUnknown not allowed before =.";
 
-    // Needed to pass to spvTextEncodeOpcode(), but it shouldn't ever be
+    // Needed to pass to spvTextEncodeOperand(), but it shouldn't ever be
     // expanded.
     spv_operand_pattern_t dummyExpectedOperands;
     error = spvTextEncodeOperand(
