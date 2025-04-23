@@ -14,6 +14,7 @@
 # limitations under the License.
 """Generates various info tables from SPIR-V JSON grammar."""
 
+import copy
 import errno
 import json
 import os.path
@@ -128,6 +129,38 @@ def convert_operand_kind(obj: dict[str, str]) -> str:
     return 'SPV_OPERAND_TYPE_{}'.format(
         re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
+def PreprocessOperandKinds(operand_kinds):
+    """
+    Adjust the operand kinds list.
+
+    - Some operand kinds need to have their optional counterpart to also
+      be represented in the tables, with the same content.  Clone their
+      entries.
+
+    Returns them in order, sorted by name.
+    """
+
+    # Some operand kinds need their optional counterparts to be
+    # in the table. Clone them here.
+    optional_enums = ['ImageOperands',
+                      'AccessQualifier',
+                      'MemoryAccess',
+                      'PackedVectorFormat',
+                      'CooperativeMatrixOperands',
+                      'MatrixMultiplyAccumulateOperands',
+                      'RawAccessChainOperands',
+                      'FPEncoding']
+
+    extras: list[dict] = []
+    for o in operand_kinds:
+        if o['kind'] in optional_enums:
+            extra = copy.deepcopy(o)
+            extra['quantifier'] = '?'
+            extras.append(extra)
+    operand_kinds.extend(extras)
+
+    return sorted(operand_kinds, key = lambda ok: convert_operand_kind(ok))
+
 
 class Grammar():
     """
@@ -140,7 +173,7 @@ class Grammar():
     def __init__(self, extensions: list[str], operand_kinds:list[dict]) -> None:
         self.context = Context()
         self.extensions = extensions
-        self.operand_kinds = sorted(operand_kinds, key = lambda ok: ok['kind'])
+        self.operand_kinds = PreprocessOperandKinds(operand_kinds)
         self.header_decls: list[str] = [self.IndexRangeDecls()]
         self.body_decls: list[str] = []
 
@@ -151,6 +184,7 @@ class Grammar():
 
         # Preload the string table
         self.context.AddStringList('extension', extensions)
+
 
     def dump(self) -> None:
         self.context.dump()
@@ -177,6 +211,14 @@ constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
     def ComputeOperandTables(self) -> None:
         """
         Returns the string for the C declarations of the operand kind tables.
+
+        An operand kind such as ImageOperands also has an associated
+        OptionalImageOperands that is added by PreprocessOperandKinds.
+        These are represented as two distinct operand kinds, and will have
+        their own independent entries in the generated tables.  This implies
+        that the ok['kind'] is not unique, because you also have to include
+        the quantifier information. We use the convert_operand_kind function
+        to generate unique operand kind keys.
 
         They are:
          - kOperandsByValue: a 1-dimensional array of all operand descriptions
@@ -244,25 +286,25 @@ struct OperandDesc {
         name_range_for_kind: dict[str,IndexRange] = {}
         ctype_for: dict[str,str] = {}
         for operand_kind_json in self.operand_kinds:
-            kind: str = operand_kind_json['kind']
-            ctype_for[kind] = convert_operand_kind(operand_kind_json)
+            kind_key: str = convert_operand_kind(operand_kind_json)
             if ShouldEmit(operand_kind_json):
                 operands = [Operand(o) for o in operand_kind_json['enumerants']]
                 tuples: list[tuple[str,int,str]] = []
                 for o in operands:
-                    tuples.append((o.enumerant, o.value, kind))
+                    tuples.append((o.enumerant, o.value, kind_key))
                     for a in o.aliases:
-                        tuples.append((a, o.value, kind))
+                        tuples.append((a, o.value, kind_key))
                 tuples = sorted(tuples, key = lambda t: t[0])
-                ir_tuples = [(self.context.AddString(t[0]),t[1]) for t in tuples]
-                name_range_for_kind[kind] = IndexRange(len(operand_names), len(ir_tuples))
+                ir_tuples = [(self.context.AddString(t[0]),t[1],t[2]) for t in tuples]
+                name_range_for_kind[kind_key] = IndexRange(len(operand_names), len(ir_tuples))
                 operand_names.extend(ir_tuples)
             else:
                 pass
         operand_name_strings: list[str] = []
         for i in range(0, len(operand_names)):
-            ir, value = operand_names[i]
-            operand_name_strings.append('{{{}, {}}}, // {} {}'.format(str(ir),value,i,self.context.GetString(ir)))
+            ir, value, kind_key = operand_names[i]
+            operand_name_strings.append('{{{}, {}}}, // {} {} in {}'.format(
+                str(ir),value,i,self.context.GetString(ir),kind_key))
 
         parts: list[str] = []
         parts.append("""// Operand names and values, ordered by (operand kind, name)
@@ -278,19 +320,19 @@ struct OperandDesc {
 // The result is an IndexRange into kOperandNames, and the names
 // are sorted by name within that span.""")
         parts = ["IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
-        for kind, ir in name_range_for_kind.items():
+        for kind_key, ir in name_range_for_kind.items():
             parts.append("    case {}: return {};".format(
-                ctype_for[kind],
-                str(name_range_for_kind[kind])))
+                kind_key,
+                str(name_range_for_kind[kind_key])))
         parts.append("    default: break;");
-        parts.append("  }\n  return IR(0,0);\n}")
+        parts.append("  }\n  return IR(0,0);\n}\n")
         self.body_decls.extend(parts)
 
         # Populate kOperandsByValue
         operands_by_value: list[str] = []
         operands_by_value_by_kind: dict[str,IndexRange] = {}
         for operand_kind_json in self.operand_kinds:
-            kind: str = operand_kind_json['kind']
+            kind_key: str = convert_operand_kind(operand_kind_json)
             if ShouldEmit(operand_kind_json):
                 operands = [Operand(o) for o in operand_kind_json['enumerants']]
                 operand_descs: list[str] = []
@@ -306,8 +348,8 @@ struct OperandDesc {
                         convert_min_required_version(o.version),
                         convert_max_required_version(o.lastVersion),
                     ]
-                    operand_descs.append('{' + ','.join([str(d) for d in desc]) + '},')
-                operands_by_value_by_kind[kind] = IndexRange(len(operands_by_value), len(operand_descs))
+                    operand_descs.append('{' + ','.join([str(d) for d in desc]) + '}}, // {}'.format(kind_key))
+                operands_by_value_by_kind[kind_key] = IndexRange(len(operands_by_value), len(operand_descs))
                 operands_by_value.extend(operand_descs)
             else:
                 pass
@@ -333,10 +375,10 @@ struct OperandDesc {
 // The result is an IndexRange into kOperandsByValue, and the operands
 // are sorted by value within that span.""")
         parts.append("static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {")
-        for kind, ir in operands_by_value_by_kind.items():
+        for kind_key, ir in operands_by_value_by_kind.items():
             parts.append("    case {}: return {};".format(
-                ctype_for[kind],
-                str(operands_by_value_by_kind[kind])))
+                kind_key,
+                str(operands_by_value_by_kind[kind_key])))
         parts.append("    default: break;");
         parts.append("  }\n  return IR(0,0);\n}\n")
         self.body_decls.extend(parts)
