@@ -84,62 +84,6 @@ spv_result_t spvOpcodeTableGet(spv_opcode_table* pInstTable, spv_target_env) {
   return SPV_SUCCESS;
 }
 
-spv_result_t spvOpcodeTableNameLookup(spv_target_env env,
-                                      const spv_opcode_table table,
-                                      const char* name,
-                                      spv_opcode_desc* pEntry) {
-  if (!name || !pEntry) return SPV_ERROR_INVALID_POINTER;
-  if (!table) return SPV_ERROR_INVALID_TABLE;
-
-  // TODO: This lookup of the Opcode table is suboptimal! Binary sort would be
-  // preferable but the table requires sorting on the Opcode name, but it's
-  // static const initialized and matches the order of the spec.
-  const size_t nameLength = strlen(name);
-  const auto version = spvVersionForTargetEnv(env);
-  for (uint64_t opcodeIndex = 0; opcodeIndex < table->count; ++opcodeIndex) {
-    const spv_opcode_desc_t& entry = table->entries[opcodeIndex];
-    // We consider the current opcode as available as long as
-    // 1. The target environment satisfies the minimal requirement of the
-    //    opcode; or
-    // 2. There is at least one extension enabling this opcode.
-    //
-    // Note that the second rule assumes the extension enabling this instruction
-    // is indeed requested in the SPIR-V code; checking that should be
-    // validator's work.
-    if ((version >= entry.minVersion && version <= entry.lastVersion) ||
-        entry.numExtensions > 0u || entry.numCapabilities > 0u) {
-      // Exact match case.
-      if (nameLength == strlen(entry.name) &&
-          !strncmp(name, entry.name, nameLength)) {
-        *pEntry = &entry;
-        return SPV_SUCCESS;
-      }
-      // Lack of binary search really hurts here. There isn't an easy filter to
-      // apply before checking aliases since we need to handle promotion from
-      // vendor to KHR/EXT and KHR/EXT to core. It would require a sure-fire way
-      // of dropping suffices. Fortunately, most lookup are based on token
-      // value.
-      //
-      // If this was a binary search we could iterate between the lower and
-      // upper bounds.
-      if (entry.numAliases > 0) {
-        for (uint32_t aliasIndex = 0; aliasIndex < entry.numAliases;
-             aliasIndex++) {
-          // Skip Op prefix. Should this be encoded in the table instead?
-          const auto alias = entry.aliases[aliasIndex] + 2;
-          const size_t aliasLength = strlen(alias);
-          if (nameLength == aliasLength && !strncmp(name, alias, nameLength)) {
-            *pEntry = &entry;
-            return SPV_SUCCESS;
-          }
-        }
-      }
-    }
-  }
-
-  return SPV_ERROR_INVALID_LOOKUP;
-}
-
 spv_result_t spvOpcodeTableValueLookup(spv_target_env env,
                                        const spv_opcode_table table,
                                        const spv::Op opcode,
