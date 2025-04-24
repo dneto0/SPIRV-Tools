@@ -153,9 +153,11 @@ spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
   return SPV_ERROR_INVALID_LOOKUP;
 }
 
-spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name, InstructionDesc** desc) {
+static template <typename KEY_TYPE>
+spv_result_t LookupOpcodeForEnvInternal(spv_target_env env, KEY_TYPE key,
+                                        InstructionDesc** desc) {
   InstructionDesc* desc_proxy;
-  auto status = LookupOpcode(name, &desc_proxy);
+  auto status = LookupOpcode(key, &desc_proxy);
   if (status != SPV_SUCCESS) {
     return status;
   }
@@ -168,6 +170,16 @@ spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name, Instructio
     return SPV_SUCCESS;
   }
   return SPV_ERROR_INVALID_LOOKUP;
+}
+
+spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name,
+                                InstructionDesc** desc) {
+  return LookupOpcodeForEnvInternal(env, name, desc);
+}
+
+spv_result_t LookupOpcodeForEnv(spv_target_env env, spv::Op opcode,
+                                InstructionDesc** desc) {
+  return LookupOpcodeForEnvInternal(env, opcode, desc);
 }
 
 spv_result_t LookupOperand(spv_operand_type_t type, uint32_t value,

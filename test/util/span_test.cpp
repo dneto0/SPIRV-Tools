@@ -155,6 +155,69 @@ TEST(SpanTest, Initialize_NonemptySpan_Iterator_PreDecrement) {
   EXPECT_EQ(iter, s.begin());
 }
 
+TEST(SpanTest, Subspan_FromNil) {
+  const Span<int> snil(nullptr, 0);
+
+  const auto s0 = snil.subspan(0);
+  const auto s2 = snil.subspan(2);
+
+  EXPECT_EQ(s0.begin(), nullptr);
+  EXPECT_EQ(s0.end(), nullptr);
+  EXPECT_EQ(s0.size(), 0u);
+  EXPECT_TRUE(s0.empty());
+
+  EXPECT_EQ(s2.begin(), nullptr);
+  EXPECT_EQ(s2.end(), nullptr);
+  EXPECT_EQ(s2.size(), 0u);
+  EXPECT_TRUE(s2.empty());
+}
+
+TEST(SpanTest, Subspan_FromEmpty) {
+  int ints[10] = {0, 10, 20, 30, 40, 50, 60};
+  int* first = ints + 2;
+  const Span<int> s(first, 0);
+
+  const auto s0 = s.subspan(0);
+  const auto s2 = s.subspan(2);
+
+  EXPECT_EQ(s0.begin(), nullptr);
+  EXPECT_EQ(s0.end(), nullptr);
+  EXPECT_EQ(s0.size(), 0u);
+  EXPECT_TRUE(s0.empty());
+
+  EXPECT_EQ(s2.begin(), nullptr);
+  EXPECT_EQ(s2.end(), nullptr);
+  EXPECT_EQ(s2.size(), 0u);
+  EXPECT_TRUE(s2.empty());
+}
+
+TEST(SpanTest, Subspan_FromNonEmpty) {
+  int ints[10] = {0, 10, 20, 30, 40, 50, 60};
+  int* first = ints + 2;
+  const Span<int> s(first, 3);
+
+  const auto s0 = s.subspan(0);
+  const auto s2 = s.subspan(2);
+  const auto s3 = s.subspan(3);
+  const auto s4 = s.subspan(4);
+
+  EXPECT_EQ(s0.begin(), s.begin());
+  EXPECT_EQ(s0.end(), s.end());
+  EXPECT_EQ(s0.size(), 3u);
+
+  EXPECT_EQ(s2.begin(), s.begin() + 2);
+  EXPECT_EQ(s2.end(), s.end());
+  EXPECT_EQ(s2.size(), 1u);
+
+  EXPECT_EQ(s3.begin(), nullptr);
+  EXPECT_EQ(s3.end(), nullptr);
+  EXPECT_EQ(s3.size(), 0u);
+
+  EXPECT_EQ(s4.begin(), nullptr);
+  EXPECT_EQ(s4.end(), nullptr);
+  EXPECT_EQ(s4.size(), 0u);
+}
+
 }  // namespace
 }  // namespace utils
 }  // namespace spvtools

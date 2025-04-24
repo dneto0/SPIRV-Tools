@@ -52,6 +52,17 @@ TEST_P(OpcodeLookupTest, OpcodeLookup_ByName) {
   }
 }
 
+TEST_P(OpcodeLookupTest, OpcodeLookup_ByOpcode_Success) {
+  InstructionDesc* desc = nullptr;
+  if (GetParam().expect_pass) {
+    spv::Op opcode = static_cast<spv::Op>(GetParam().opcode);
+    auto status = LookupOpcode(opcode, &desc);
+    EXPECT_EQ(status, SPV_SUCCESS);
+    ASSERT_NE(desc, nullptr);
+    EXPECT_EQ(desc->opcode, opcode);
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(Samples, OpcodeLookupTest,
                          ValuesIn(std::vector<OpcodeLookupCase>{
                              {"Nop", 0},
@@ -63,6 +74,18 @@ INSTANTIATE_TEST_SUITE_P(Samples, OpcodeLookupTest,
                              {"FPGARegINTEL", 5949},
                              {"SubgroupMatrixMultiplyAccumulateINTEL", 6237},
                          }));
+
+TEST(OpcodeLookupSingleTest, OpcodeLookup_ByOpcode_Fails) {
+  // This list may need adjusting over time.
+  std::array<uint32_t, 3> bad_opcodes = {{99999, 37737, 110101}};
+  for (auto bad_opcode : bad_opcodes) {
+    InstructionDesc* desc = nullptr;
+    spv::Op opcode = static_cast<spv::Op>(bad_opcode);
+    auto status = LookupOpcode(opcode, &desc);
+    EXPECT_NE(status, SPV_SUCCESS);
+    ASSERT_EQ(desc, nullptr);
+  }
+}
 
 struct OpcodeLookupEnvCase {
   std::string name;
@@ -93,15 +116,33 @@ TEST_P(OpcodeLookupEnvTest, OpcodeLookupForEnv_ByName) {
   }
 }
 
+TEST_P(OpcodeLookupEnvTest, OpcodeLookupForEnv_ByOpcode) {
+  InstructionDesc* desc = nullptr;
+  spv::Op opcode = static_cast<spv::Op>(GetParam().opcode);
+  auto status = LookupOpcodeForEnv(GetParam().env, opcode, &desc);
+  if (GetParam().expect_pass) {
+    EXPECT_EQ(status, SPV_SUCCESS);
+    ASSERT_NE(desc, nullptr);
+    EXPECT_EQ(desc->opcode, opcode);
+  } else {
+    // Skip nonsense cases created for the lookup-by-name case.
+    if (GetParam().name != "does not exist") {
+      EXPECT_NE(status, SPV_SUCCESS);
+      EXPECT_EQ(desc, nullptr);
+    }
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(Samples, OpcodeLookupEnvTest,
                          ValuesIn(std::vector<OpcodeLookupEnvCase>{
                              {"Nop", 0},
                              {"WritePipe", 275},
                              {"TypeAccelerationStructureKHR", 5341},
                              {"TypeAccelerationStructureNV", 5341},
-                             {"does not exist", 0, SPV_ENV_UNIVERSAL_1_0, false},
-                             {"CopyLogical", 0, SPV_ENV_UNIVERSAL_1_0, false},
-                             {"CopyLogical", 0, SPV_ENV_UNIVERSAL_1_3, false},
+                             {"does not exist", 0, SPV_ENV_UNIVERSAL_1_0,
+                              false},
+                             {"CopyLogical", 400, SPV_ENV_UNIVERSAL_1_0, false},
+                             {"CopyLogical", 400, SPV_ENV_UNIVERSAL_1_3, false},
                              {"CopyLogical", 400, SPV_ENV_UNIVERSAL_1_4, true},
                              {"FPGARegINTEL", 5949},
                              {"SubgroupMatrixMultiplyAccumulateINTEL", 6237},

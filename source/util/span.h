@@ -54,6 +54,12 @@ class Span {
   reference back() const { return *(first_ + count_ - 1); }
   pointer data() const { return first_; }
   reference operator[](size_type idx) const { return first_[idx]; }
+  Span<T> subspan(size_type offset) const {
+    if (count_ > offset) {
+      return Span(first_ + offset, count_ - offset);
+    }
+    return Span<T>();
+  }
 
  private:
   T* first_ = nullptr;

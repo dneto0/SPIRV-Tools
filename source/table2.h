@@ -172,6 +172,16 @@ spv_result_t LookupOpcode(spv::Op opcode, InstructionDesc** desc);
 // On success, returns SPV_SUCCESS and updates *desc.
 spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name, InstructionDesc** desc);
 
+// Finds the instruction description by opcode value.
+// A lookup will succeed if:
+// - The instruction exists, and
+// - Either the target environment supports the SPIR-V version of the
+// instruction,
+//   or the instruction is enabled by at least one extension,
+//   or the instruction is enabled by at least one capability.,
+// On success, returns SPV_SUCCESS and updates *desc.
+spv_result_t LookupOpcodeForEnv(spv_target_env env, spv::Op,
+                                InstructionDesc** desc);
 
 spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
                            size_t name_len, OperandDesc** desc);
