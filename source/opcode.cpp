@@ -27,14 +27,10 @@
 #include "source/spirv_constant.h"
 #include "source/spirv_endian.h"
 #include "source/spirv_target_env.h"
+#include "source/table2.h"
 #include "spirv-tools/libspirv.h"
 
 namespace {
-
-#include "core.insts-unified1.inc"
-
-static const spv_opcode_table_t kOpcodeTable = {ARRAY_SIZE(kOpcodeTableEntries),
-                                                kOpcodeTableEntries};
 
 // Represents a vendor tool entry in the SPIR-V XML Registry.
 struct VendorTool {
@@ -74,16 +70,6 @@ void spvOpcodeSplit(const uint32_t word, uint16_t* pWordCount,
   }
 }
 
-spv_result_t spvOpcodeTableGet(spv_opcode_table* pInstTable, spv_target_env) {
-  if (!pInstTable) return SPV_ERROR_INVALID_POINTER;
-
-  // Descriptions of each opcode.  Each entry describes the format of the
-  // instruction that follows a particular opcode.
-
-  *pInstTable = &kOpcodeTable;
-  return SPV_SUCCESS;
-}
-
 void spvInstructionCopy(const uint32_t* words, const spv::Op opcode,
                         const uint16_t wordCount, const spv_endianness_t endian,
                         spv_instruction_t* pInst) {
@@ -102,25 +88,12 @@ void spvInstructionCopy(const uint32_t* words, const spv::Op opcode,
 }
 
 const char* spvOpcodeString(const uint32_t opcode) {
-  const auto beg = kOpcodeTableEntries;
-  const auto end = kOpcodeTableEntries + ARRAY_SIZE(kOpcodeTableEntries);
-  spv_opcode_desc_t needle = {"",    static_cast<spv::Op>(opcode),
-                              0,     nullptr,
-                              0,     {},
-                              0,     {},
-                              false, false,
-                              0,     nullptr,
-                              ~0u,   ~0u};
-  auto comp = [](const spv_opcode_desc_t& lhs, const spv_opcode_desc_t& rhs) {
-    return lhs.opcode < rhs.opcode;
-  };
-  auto it = std::lower_bound(beg, end, needle, comp);
-  if (it != end && it->opcode == spv::Op(opcode)) {
-    return it->name;
+  spvtools::InstructionDesc* desc = nullptr;
+  if (spvtools::LookupOpcode(static_cast<spv::Op>(opcode), &desc)) {
+    assert(0 && "Unreachable!");
+    return "unknown";
   }
-
-  assert(0 && "Unreachable!");
-  return "unknown";
+  return desc->name().data();
 }
 
 const char* spvOpcodeString(const spv::Op opcode) {

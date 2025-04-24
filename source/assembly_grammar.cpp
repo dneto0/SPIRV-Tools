@@ -170,9 +170,7 @@ const size_t kNumOpSpecConstantOpcodes =
 
 }  // namespace
 
-bool AssemblyGrammar::isValid() const {
-  return operandTable_ && opcodeTable_ && extInstTable_;
-}
+bool AssemblyGrammar::isValid() const { return operandTable_ && extInstTable_; }
 
 CapabilitySet AssemblyGrammar::filterCapsAgainstTargetEnv(
     const spv::Capability* cap_array, uint32_t count) const {

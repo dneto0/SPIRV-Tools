@@ -2804,9 +2804,6 @@ spv_result_t Differ::Output() {
   spv_ext_inst_table ext_inst_table;
   spv_result_t result;
 
-  result = spvOpcodeTableGet(&opcode_table, target_env);
-  if (result != SPV_SUCCESS) return result;
-
   result = spvOperandTableGet(&operand_table, target_env);
   if (result != SPV_SUCCESS) return result;
 
@@ -2815,7 +2812,6 @@ spv_result_t Differ::Output() {
 
   spv_context_t context{
       target_env,
-      opcode_table,
       operand_table,
       ext_inst_table,
   };

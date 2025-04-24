@@ -170,7 +170,6 @@ typedef const spv_ext_inst_table_t* spv_ext_inst_table;
 
 struct spv_context_t {
   const spv_target_env target_env;
-  const spv_opcode_table opcode_table;
   const spv_operand_table operand_table;
   const spv_ext_inst_table ext_inst_table;
   spvtools::MessageConsumer consumer;
@@ -182,9 +181,6 @@ namespace spvtools {
 // message consumer will be overwritten.
 void SetContextMessageConsumer(spv_context context, MessageConsumer consumer);
 }  // namespace spvtools
-
-// Populates *table with entries for env.
-spv_result_t spvOpcodeTableGet(spv_opcode_table* table, spv_target_env env);
 
 // Populates *table with entries for env.
 spv_result_t spvOperandTableGet(spv_operand_table* table, spv_target_env env);
