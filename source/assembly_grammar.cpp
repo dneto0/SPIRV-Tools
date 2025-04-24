@@ -194,11 +194,6 @@ CapabilitySet AssemblyGrammar::filterCapsAgainstTargetEnv(
   return cap_set;
 }
 
-spv_result_t AssemblyGrammar::lookupOpcode(spv::Op opcode,
-                                           spv_opcode_desc* desc) const {
-  return spvOpcodeTableValueLookup(target_env_, opcodeTable_, opcode, desc);
-}
-
 spv_result_t AssemblyGrammar::lookupOperand(spv_operand_type_t type,
                                             const char* name, size_t name_len,
                                             spv_operand_desc* desc) const {

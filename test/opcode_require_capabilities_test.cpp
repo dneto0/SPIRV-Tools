@@ -15,6 +15,7 @@
 #include "test/unit_spirv.h"
 
 #include "source/enum_set.h"
+#include "source/table2.h"
 
 namespace spvtools {
 namespace {
@@ -31,15 +32,12 @@ using OpcodeTableCapabilitiesTest =
     ::testing::TestWithParam<ExpectedOpCodeCapabilities>;
 
 TEST_P(OpcodeTableCapabilitiesTest, TableEntryMatchesExpectedCapabilities) {
-  auto env = SPV_ENV_UNIVERSAL_1_1;
-  spv_opcode_table opcodeTable;
-  ASSERT_EQ(SPV_SUCCESS, spvOpcodeTableGet(&opcodeTable, env));
-  spv_opcode_desc entry;
-  ASSERT_EQ(SPV_SUCCESS, spvOpcodeTableValueLookup(env, opcodeTable,
-                                                   GetParam().opcode, &entry));
+  spvtools::InstructionDesc* desc = nullptr;
+  ASSERT_EQ(SPV_SUCCESS, spvtools::LookupOpcode(GetParam().opcode, &desc));
+  auto caps = desc->capabilities();
   EXPECT_EQ(
       ElementsIn(GetParam().capabilities),
-      ElementsIn(CapabilitySet(entry->numCapabilities, entry->capabilities)));
+      ElementsIn(CapabilitySet(caps.size(), caps.data())));
 }
 
 INSTANTIATE_TEST_SUITE_P(

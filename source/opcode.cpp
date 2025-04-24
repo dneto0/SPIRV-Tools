@@ -84,49 +84,6 @@ spv_result_t spvOpcodeTableGet(spv_opcode_table* pInstTable, spv_target_env) {
   return SPV_SUCCESS;
 }
 
-spv_result_t spvOpcodeTableValueLookup(spv_target_env env,
-                                       const spv_opcode_table table,
-                                       const spv::Op opcode,
-                                       spv_opcode_desc* pEntry) {
-  if (!table) return SPV_ERROR_INVALID_TABLE;
-  if (!pEntry) return SPV_ERROR_INVALID_POINTER;
-
-  const auto beg = table->entries;
-  const auto end = table->entries + table->count;
-
-  spv_opcode_desc_t needle = {"", opcode, 0,     nullptr, 0,       {},  0,
-                              {}, false,  false, 0,       nullptr, ~0u, ~0u};
-
-  auto comp = [](const spv_opcode_desc_t& lhs, const spv_opcode_desc_t& rhs) {
-    return lhs.opcode < rhs.opcode;
-  };
-
-  // We need to loop here because there can exist multiple symbols for the same
-  // opcode value, and they can be introduced in different target environments,
-  // which means they can have different minimal version requirements.
-  // Assumes the underlying table is already sorted ascendingly according to
-  // opcode value.
-  const auto version = spvVersionForTargetEnv(env);
-  for (auto it = std::lower_bound(beg, end, needle, comp);
-       it != end && it->opcode == opcode; ++it) {
-    // We considers the current opcode as available as long as
-    // 1. The target environment satisfies the minimal requirement of the
-    //    opcode; or
-    // 2. There is at least one extension enabling this opcode.
-    //
-    // Note that the second rule assumes the extension enabling this instruction
-    // is indeed requested in the SPIR-V code; checking that should be
-    // validator's work.
-    if ((version >= it->minVersion && version <= it->lastVersion) ||
-        it->numExtensions > 0u || it->numCapabilities > 0u) {
-      *pEntry = it;
-      return SPV_SUCCESS;
-    }
-  }
-
-  return SPV_ERROR_INVALID_LOOKUP;
-}
-
 void spvInstructionCopy(const uint32_t* words, const spv::Op opcode,
                         const uint16_t wordCount, const spv_endianness_t endian,
                         spv_instruction_t* pInst) {
