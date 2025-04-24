@@ -40,6 +40,7 @@
 #include "source/print.h"
 #include "source/spirv_constant.h"
 #include "source/spirv_endian.h"
+#include "source/table2.h"
 #include "source/util/hex_float.h"
 #include "source/util/make_unique.h"
 #include "spirv-tools/libspirv.h"
@@ -885,11 +886,11 @@ void InstructionDisassembler::EmitOperand(std::ostream& stream,
       }
     } break;
     case SPV_OPERAND_TYPE_SPEC_CONSTANT_OP_NUMBER: {
-      spv_opcode_desc opcode_desc;
-      if (grammar_.lookupOpcode(spv::Op(word), &opcode_desc))
+      spvtools::InstructionDesc* opcodeEntry = nullptr;
+      if (LookupOpcode(spv::Op(word), &opcodeEntry))
         assert(false && "should have caught this earlier");
       SetRed(stream);
-      stream << opcode_desc->name;
+      stream << opcodeEntry->name().data();
     } break;
     case SPV_OPERAND_TYPE_LITERAL_INTEGER:
     case SPV_OPERAND_TYPE_TYPED_LITERAL_NUMBER:

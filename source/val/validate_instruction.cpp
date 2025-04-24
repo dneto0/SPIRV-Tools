@@ -27,6 +27,7 @@
 #include "source/spirv_constant.h"
 #include "source/spirv_target_env.h"
 #include "source/spirv_validator_options.h"
+#include "source/table2.h"
 #include "source/util/string_utils.h"
 #include "source/val/validate.h"
 #include "source/val/validation_state.h"
@@ -72,10 +73,11 @@ CapabilitySet EnablingCapabilitiesForOp(const ValidationState_t& state,
       break;
   }
   // Look it up in the grammar
-  spv_opcode_desc opcode_desc = {};
-  if (SPV_SUCCESS == state.grammar().lookupOpcode(opcode, &opcode_desc)) {
+  spvtools::InstructionDesc* opcode_desc = nullptr;
+  if (SPV_SUCCESS ==
+      LookupOpcodeForEnv(state.context()->target_env, opcode, &opcode_desc)) {
     return state.grammar().filterCapsAgainstTargetEnv(
-        opcode_desc->capabilities, opcode_desc->numCapabilities);
+        opcode_desc->capabilities());
   }
   return CapabilitySet();
 }
@@ -222,10 +224,10 @@ spv_result_t ReservedCheck(ValidationState_t& _, const Instruction* inst) {
     case spv::Op::OpImageSparseSampleProjExplicitLod:
     case spv::Op::OpImageSparseSampleProjDrefImplicitLod:
     case spv::Op::OpImageSparseSampleProjDrefExplicitLod: {
-      spv_opcode_desc inst_desc;
-      _.grammar().lookupOpcode(opcode, &inst_desc);
+      spvtools::InstructionDesc* inst_desc = nullptr;
+      spvtools::LookupOpcode(opcode, &inst_desc);
       return _.diag(SPV_ERROR_INVALID_BINARY, inst)
-             << "Invalid Opcode name 'Op" << inst_desc->name << "'";
+             << "Invalid Opcode name 'Op" << inst_desc->name().data() << "'";
     }
     default:
       break;
@@ -276,8 +278,8 @@ spv_result_t CapabilityCheck(ValidationState_t& _, const Instruction* inst) {
 // dependencies for the opcode.
 spv_result_t VersionCheck(ValidationState_t& _, const Instruction* inst) {
   const auto opcode = inst->opcode();
-  spv_opcode_desc inst_desc;
-  const spv_result_t r = _.grammar().lookupOpcode(opcode, &inst_desc);
+  spvtools::InstructionDesc* inst_desc;
+  const spv_result_t r = spvtools::LookupOpcode(opcode, &inst_desc);
   assert(r == SPV_SUCCESS);
   (void)r;
 
@@ -297,13 +299,14 @@ spv_result_t VersionCheck(ValidationState_t& _, const Instruction* inst) {
   const bool capability_check_is_sufficient =
       inst->opcode() != spv::Op::OpTerminateInvocation;
 
-  if (capability_check_is_sufficient && (inst_desc->numCapabilities > 0u)) {
+  if (capability_check_is_sufficient && !inst_desc->capabilities().empty()) {
     // We already checked that the direct capability dependency has been
     // satisfied. We don't need to check any further.
     return SPV_SUCCESS;
   }
 
-  ExtensionSet exts(inst_desc->numExtensions, inst_desc->extensions);
+  ExtensionSet exts(inst_desc->extensions().begin(),
+                    inst_desc->extensions().end());
   if (exts.empty()) {
     // If no extensions can enable this instruction, then emit error
     // messages only concerning core SPIR-V versions if errors happen.

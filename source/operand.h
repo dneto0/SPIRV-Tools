@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "source/table.h"
+#include "source/util/span.h"
 #include "spirv-tools/libspirv.h"
 
 // A sequence of operand types.
@@ -72,6 +73,12 @@ bool spvOperandIsVariable(spv_operand_type_t type);
 // SPV_OPERAND_TYPE_NONE.
 void spvPushOperandTypes(const spv_operand_type_t* types,
                          spv_operand_pattern_t* pattern);
+
+// Append a list of operand types to the end of the pattern vector.
+// The types parameter specifies the source span of types.
+void spvPushOperandTypes(
+    const spvtools::utils::Span<const spv_operand_type_t>& types,
+    spv_operand_pattern_t* pattern);
 
 // Appends the operands expected after the given typed mask onto the
 // end of the given pattern.

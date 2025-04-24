@@ -28,6 +28,7 @@
 #include "source/opt/module.h"
 #include "source/opt/pass.h"
 #include "source/spirv_target_env.h"
+#include "source/table2.h"
 
 namespace spvtools {
 namespace opt {
@@ -142,6 +143,16 @@ class TrimCapabilitiesPass : public Pass {
       }
     }
   }
+  template <>
+  inline void addSupportedCapabilitiesToSet<spvtools::InstructionDesc>(
+      const spvtools::InstructionDesc* const descriptor,
+      CapabilitySet* output) const {
+    for (auto capability : descriptor->capabilities()) {
+      if (supportedCapabilities_.contains(capability)) {
+        output->insert(capability);
+      }
+    }
+  }
 
   // Inserts every extension listed by `descriptor` required by the module into
   // `output`. Expects a Descriptor like `spv_opcode_desc_t` or
@@ -155,6 +166,17 @@ class TrimCapabilitiesPass : public Pass {
     }
     output->insert(descriptor->extensions,
                    descriptor->extensions + descriptor->numExtensions);
+  }
+  template <>
+  inline void addSupportedExtensionsToSet<spvtools::InstructionDesc>(
+      const spvtools::InstructionDesc* const descriptor,
+      ExtensionSet* output) const {
+    if (descriptor->minVersion <=
+        spvVersionForTargetEnv(context()->GetTargetEnv())) {
+      return;
+    }
+    output->insert(descriptor->extensions().begin(),
+                   descriptor->extensions().end());
   }
 
   void addInstructionRequirementsForOpcode(spv::Op opcode,

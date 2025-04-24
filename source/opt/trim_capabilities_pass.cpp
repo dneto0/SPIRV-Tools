@@ -31,6 +31,7 @@
 #include "source/opt/ir_context.h"
 #include "source/opt/reflect.h"
 #include "source/spirv_target_env.h"
+#include "source/table2.h"
 #include "source/util/string_utils.h"
 
 namespace spvtools {
@@ -513,8 +514,8 @@ void TrimCapabilitiesPass::addInstructionRequirementsForOpcode(
     return;
   }
 
-  const spv_opcode_desc_t* desc = {};
-  auto result = context()->grammar().lookupOpcode(opcode, &desc);
+  spvtools::InstructionDesc* desc;
+  auto result = spvtools::LookupOpcode(opcode, &desc);
   if (result != SPV_SUCCESS) {
     return;
   }

@@ -19,6 +19,7 @@
 #include "source/latest_version_spirv_header.h"
 #include "source/operand.h"
 #include "source/table.h"
+#include "source/util/span.h"
 #include "spirv-tools/libspirv.h"
 
 namespace spvtools {
@@ -41,8 +42,15 @@ class AssemblyGrammar {
 
   // Removes capabilities not available in the current target environment and
   // returns the rest.
+  // TODO(crbug.com/266223071) Remove this.
   CapabilitySet filterCapsAgainstTargetEnv(const spv::Capability* cap_array,
                                            uint32_t count) const;
+  // Removes capabilities not available in the current target environment and
+  // returns the rest.
+  CapabilitySet filterCapsAgainstTargetEnv(
+      const spvtools::utils::Span<const spv::Capability>& caps) const {
+    return filterCapsAgainstTargetEnv(caps.begin(), caps.size());
+  }
 
   // Fills in the desc parameter with the information about the opcode
   // of the valid. Returns SPV_SUCCESS if the opcode was found, and

@@ -315,12 +315,28 @@ const char* spvOperandTypeStr(spv_operand_type_t type) {
 
 void spvPushOperandTypes(const spv_operand_type_t* types,
                          spv_operand_pattern_t* pattern) {
+  // Push them on in backward order.
   const spv_operand_type_t* endTypes;
   for (endTypes = types; *endTypes != SPV_OPERAND_TYPE_NONE; ++endTypes) {
   }
 
   while (endTypes-- != types) {
     pattern->push_back(*endTypes);
+  }
+}
+
+void spvPushOperandTypes(
+    const spvtools::utils::Span<const spv_operand_type_t>& types,
+    spv_operand_pattern_t* pattern) {
+  // Push them on in backward order.
+  auto n = types.size();
+  for (auto i = 0; i < n; i++) {
+    auto type = types[n - 1 - i];
+    // Check against the NONE type, in case the tables have them.
+    // This might be cleaned up.
+    if (type != SPV_OPERAND_TYPE_NONE) {
+      pattern->push_back(type);
+    }
   }
 }
 

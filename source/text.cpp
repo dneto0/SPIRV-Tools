@@ -285,8 +285,8 @@ spv_result_t spvTextEncodeOperand(const spvtools::AssemblyGrammar& grammar,
         return context->diagnostic() << "Invalid " << spvOperandTypeStr(type)
                                      << " '" << textValue << "'.";
       }
-      spv_opcode_desc opcodeEntry = nullptr;
-      if (grammar.lookupOpcode(opcode, &opcodeEntry)) {
+      spvtools::InstructionDesc* opcodeEntry = nullptr;
+      if (LookupOpcodeForEnv(grammar.target_env(), opcode, &opcodeEntry)) {
         return context->diagnostic(SPV_ERROR_INTERNAL)
                << "OpSpecConstant opcode table out of sync";
       }
@@ -296,8 +296,9 @@ spv_result_t spvTextEncodeOperand(const spvtools::AssemblyGrammar& grammar,
       // type Id and result Id, since they've already been processed.
       assert(opcodeEntry->hasType);
       assert(opcodeEntry->hasResult);
-      assert(opcodeEntry->numTypes >= 2);
-      spvPushOperandTypes(opcodeEntry->operandTypes + 2, pExpectedOperands);
+      assert(opcodeEntry->operands().size() >= 2);
+      spvPushOperandTypes(opcodeEntry->operands().subspan(2),
+                          pExpectedOperands);
     } break;
 
     case SPV_OPERAND_TYPE_LITERAL_INTEGER:
@@ -347,10 +348,11 @@ spv_result_t spvTextEncodeOperand(const spvtools::AssemblyGrammar& grammar,
             context->getTypeOfTypeGeneratingValue(pInst->resultTypeId);
         if (!spvtools::isScalarFloating(expected_type) &&
             !spvtools::isScalarIntegral(expected_type)) {
-          spv_opcode_desc d;
+          spvtools::InstructionDesc* opcodeEntry = nullptr;
           const char* opcode_name = "opcode";
-          if (SPV_SUCCESS == grammar.lookupOpcode(pInst->opcode, &d)) {
-            opcode_name = d->name;
+          if (SPV_SUCCESS == LookupOpcode(pInst->opcode, &opcodeEntry)) {
+            opcode_name =
+                opcodeEntry->name().data();  // assumes it's null-terminated
           }
           return context->diagnostic()
                  << "Type for " << opcode_name
