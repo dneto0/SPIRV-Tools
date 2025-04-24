@@ -64,20 +64,17 @@ def c_bool(b: bool) -> str:
     return 'true' if b else 'false'
 
 
-def convert_operand_kind(obj: dict[str, str]) -> str:
+def ctype(kind: str, quantifier: str) -> str:
     """Returns the corresponding operand type used in spirv-tools for the given
     operand kind and quantifier used in the JSON grammar.
 
     Arguments:
-      - obj: an instruction operand, having keys:
-          - 'kind', e.g. 'IdRef'
-          - optionally, a quantifier: '?' or '*'
+      - kind, e.g. 'IdRef'
+      - quantifier, e.g. '', '?', '*'
 
     Returns:
       a string of the enumerant name in spv_operand_type_t
     """
-    kind = obj.get('kind', '')
-    quantifier = obj.get('quantifier', '')
     if kind == '':
         raise Error("operand JSON object missing a 'kind' field")
     # The following cases are where we differ between the JSON grammar and
@@ -129,37 +126,22 @@ def convert_operand_kind(obj: dict[str, str]) -> str:
     return 'SPV_OPERAND_TYPE_{}'.format(
         re.sub(r'([a-z])([A-Z])', r'\1_\2', kind).upper())
 
-def PreprocessOperandKinds(operand_kinds):
+
+def convert_operand_kind(obj: dict[str, str]) -> str:
+    """Returns the corresponding operand type used in spirv-tools for the given
+    operand kind and quantifier used in the JSON grammar.
+
+    Arguments:
+      - obj: an instruction operand, having keys:
+          - 'kind', e.g. 'IdRef'
+          - optionally, a quantifier: '?' or '*'
+
+    Returns:
+      a string of the enumerant name in spv_operand_type_t
     """
-    Adjust the operand kinds list.
-
-    - Some operand kinds need to have their optional counterpart to also
-      be represented in the tables, with the same content.  Clone their
-      entries.
-
-    Returns them in order, sorted by name.
-    """
-
-    # Some operand kinds need their optional counterparts to be
-    # in the table. Clone them here.
-    optional_enums = ['ImageOperands',
-                      'AccessQualifier',
-                      'MemoryAccess',
-                      'PackedVectorFormat',
-                      'CooperativeMatrixOperands',
-                      'MatrixMultiplyAccumulateOperands',
-                      'RawAccessChainOperands',
-                      'FPEncoding']
-
-    extras: list[dict] = []
-    for o in operand_kinds:
-        if o['kind'] in optional_enums:
-            extra = copy.deepcopy(o)
-            extra['quantifier'] = '?'
-            extras.append(extra)
-    operand_kinds.extend(extras)
-
-    return sorted(operand_kinds, key = lambda ok: convert_operand_kind(ok))
+    kind = obj.get('kind', '')
+    quantifier = obj.get('quantifier', '')
+    return ctype(kind, quantifier)
 
 
 class Grammar():
@@ -173,7 +155,7 @@ class Grammar():
     def __init__(self, extensions: list[str], operand_kinds:list[dict]) -> None:
         self.context = Context()
         self.extensions = extensions
-        self.operand_kinds = PreprocessOperandKinds(operand_kinds)
+        self.operand_kinds = sorted(operand_kinds, key = lambda ok: convert_operand_kind(ok))
         self.header_decls: list[str] = [self.IndexRangeDecls()]
         self.body_decls: list[str] = []
 
@@ -185,6 +167,17 @@ class Grammar():
         # Preload the string table
         self.context.AddStringList('extension', extensions)
 
+        # These operand kinds need to have their optional counterpart to also
+        # be represented in the lookup tables, with the same content.
+        self.operand_kinds_needing_optional_variant = [
+                'ImageOperands',
+                'AccessQualifier',
+                'MemoryAccess',
+                'PackedVectorFormat',
+                'CooperativeMatrixOperands',
+                'MatrixMultiplyAccumulateOperands',
+                'RawAccessChainOperands',
+                'FPEncoding']
 
     def dump(self) -> None:
         self.context.dump()
@@ -210,22 +203,22 @@ constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
 
     def ComputeOperandTables(self) -> None:
         """
-        Returns the string for the C declarations of the operand kind tables.
+        Returns the string for the C definitions of the operand kind tables.
 
         An operand kind such as ImageOperands also has an associated
-        OptionalImageOperands that is added by PreprocessOperandKinds.
-        These are represented as two distinct operand kinds, and will have
-        their own independent entries in the generated tables.  This implies
-        that the ok['kind'] is not unique, because you also have to include
-        the quantifier information. We use the convert_operand_kind function
-        to generate unique operand kind keys.
+        operand kind that is an 'optional' variant. 
+        These are represented as two distinct operand kinds in spv_operand_type_t.
+        For example, ImageOperands maps to both SPV_OPERAND_TYPE_IMAGE, and also
+        to SPV_OPERAND_TYPE_OPTIONAL_IMAGE.
 
-        They are:
+        The definitions are:
          - kOperandsByValue: a 1-dimensional array of all operand descriptions
            sorted first by operand kind, then by operand value.
+           Only non-optional operand kinds are represented here.
 
-         - kOperandsByValueRangeByKind: a mapping from operand kind to the index
-           range into kOperandByValue.
+         - kOperandsByValueRangeByKind: a function mapping from operand kind to
+           the index range into kOperandByValue.
+           This has mappings for both concrete and corresponding optional operand kinds.
 
          - kOperandNames: a 1-dimensional array of all operand name-value pairs,
            sorted first by operand kinds, then by operand name.
@@ -233,9 +226,11 @@ constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
            can have string aliases. For example,the MemorySemantics value 0
            is named both "Relaxed" and "None".
            Each entry is represented by an index range into the string table.
+           Only non-optional operand kinds are represented here.
 
          - kOperandNamesRangeByKind: a mapping from operand kind to the index
            range into kOperandNames.
+           This has mappings for both concrete and corresponding optional operand kinds.
 
         """
 
@@ -284,7 +279,6 @@ struct OperandDesc {
         # Populate kOperandNames
         operand_names: list[tuple[IndexRange,int]] = []
         name_range_for_kind: dict[str,IndexRange] = {}
-        ctype_for: dict[str,str] = {}
         for operand_kind_json in self.operand_kinds:
             kind_key: str = convert_operand_kind(operand_kind_json)
             if ShouldEmit(operand_kind_json):
@@ -318,12 +312,18 @@ struct OperandDesc {
 
         parts.append("""// Maps an operand kind to possible names for operands of that kind.
 // The result is an IndexRange into kOperandNames, and the names
-// are sorted by name within that span.""")
+// are sorted by name within that span.
+// An optional variant of a kind maps to the details for the corresponding
+// concrete operand kind.""")
         parts = ["IndexRange OperandNameRangeForKind(spv_operand_type_t type) {\n  switch(type) {"]
         for kind_key, ir in name_range_for_kind.items():
             parts.append("    case {}: return {};".format(
                 kind_key,
                 str(name_range_for_kind[kind_key])))
+        for kind in self.operand_kinds_needing_optional_variant:
+            parts.append("    case {}: return {};".format(
+                ctype(kind, '?'),
+                str(name_range_for_kind[ctype(kind,'')])))
         parts.append("    default: break;");
         parts.append("  }\n  return IR(0,0);\n}\n")
         self.body_decls.extend(parts)
@@ -373,12 +373,18 @@ struct OperandDesc {
         parts = []
         parts.append("""// Maps an operand kind to possible operands for that kind.
 // The result is an IndexRange into kOperandsByValue, and the operands
-// are sorted by value within that span.""")
+// are sorted by value within that span.
+// An optional variant of a kind maps to the details for the corresponding
+// concrete operand kind.""")
         parts.append("static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {")
         for kind_key, ir in operands_by_value_by_kind.items():
             parts.append("    case {}: return {};".format(
                 kind_key,
                 str(operands_by_value_by_kind[kind_key])))
+        for kind in self.operand_kinds_needing_optional_variant:
+            parts.append("    case {}: return {};".format(
+                ctype(kind, '?'),
+                str(operands_by_value_by_kind[ctype(kind,'')])))
         parts.append("    default: break;");
         parts.append("  }\n  return IR(0,0);\n}\n")
         self.body_decls.extend(parts)
