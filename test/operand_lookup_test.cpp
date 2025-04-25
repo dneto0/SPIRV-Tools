@@ -29,13 +29,15 @@ namespace {
 struct OperandLookupCase {
   spv_operand_type_t type;
   std::string name;
+  size_t name_length;
   uint32_t value;
   bool expect_pass = true;
 };
 
 std::ostream& operator<<(std::ostream& os, const OperandLookupCase& olc) {
-  os << "OLC('" << spvOperandTypeStr(olc.type) << " '" << olc.name << "', "
-     << olc.value << ", expect pass? " << olc.expect_pass << ")";
+  os << "OLC('" << spvOperandTypeStr(olc.type) << " '" << olc.name
+     << "', len:" << olc.name_length << ", value:" << olc.value
+     << ", expect pass? " << olc.expect_pass << ")";
   return os;
 }
 
@@ -44,7 +46,7 @@ using OperandLookupTest = ::testing::TestWithParam<OperandLookupCase>;
 TEST_P(OperandLookupTest, OperandLookup_ByName) {
   OperandDesc* desc = nullptr;
   auto status = LookupOperand(GetParam().type, GetParam().name.data(),
-                              GetParam().name.length(), &desc);
+                              GetParam().name_length, &desc);
   if (GetParam().expect_pass) {
     EXPECT_EQ(status, SPV_SUCCESS);
     ASSERT_NE(desc, nullptr);
@@ -69,24 +71,29 @@ TEST_P(OperandLookupTest, OperandLookup_ByValue_Success) {
 INSTANTIATE_TEST_SUITE_P(
     Samples, OperandLookupTest,
     ValuesIn(std::vector<OperandLookupCase>{
-        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed", 0},
-        // "None" is an alias
-        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "None", 0},
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed", 7, 0},
+        // "None" is an alias for "Relaxed"
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "None", 4, 0},
         // "NonPrivatePointer" is the canonical name that appeared
         // in an extension and incorporated in SPIR-V 1.5.
-        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NonPrivatePointer", 32},
+        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NonPrivatePointer", 17, 32},
         // "NonPrivatePointerKHR" is the name from the extension.
-        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NonPrivatePointerKHR", 32},
+        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NonPrivatePointerKHR", 20, 32},
         // "NoAliasINTELMask" is only in an extension
-        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NoAliasINTELMask", 0x20000},
-        {SPV_OPERAND_TYPE_RAY_FLAGS, "TerminateOnFirstHitKHR", 4},
-        {SPV_OPERAND_TYPE_FPENCODING, "BFloat16KHR", 0},
+        {SPV_OPERAND_TYPE_MEMORY_ACCESS, "NoAliasINTELMask", 16, 0x20000},
+        {SPV_OPERAND_TYPE_RAY_FLAGS, "TerminateOnFirstHitKHR", 22, 4},
+        {SPV_OPERAND_TYPE_FPENCODING, "BFloat16KHR", 11, 0},
         // Lookup on An optional operand type should match the base lookup.
-        {SPV_OPERAND_TYPE_OPTIONAL_FPENCODING, "BFloat16KHR", 0},
+        {SPV_OPERAND_TYPE_OPTIONAL_FPENCODING, "BFloat16KHR", 11, 0},
         // Lookup is type-specific.
-        {SPV_OPERAND_TYPE_OPTIONAL_FPENCODING, "Relaxed", 0, false},
+        {SPV_OPERAND_TYPE_OPTIONAL_FPENCODING, "Relaxed", 7, 0, false},
         // Invalid string
-        {SPV_OPERAND_TYPE_RAY_FLAGS, "does_not_exist", 0, false},
+        {SPV_OPERAND_TYPE_RAY_FLAGS, "does_not_exist", 14, 0, false},
+        // Check lengths
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed", 6, 0, false},
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed", 7, 0, true},
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed|", 7, 0, true},
+        {SPV_OPERAND_TYPE_MEMORY_SEMANTICS_ID, "Relaxed|", 8, 0, false},
     }));
 
 TEST(OperandLookupSingleTest, OperandLookup_ByValue_Fails) {

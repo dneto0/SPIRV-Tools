@@ -16,6 +16,8 @@
 #include "source/table2.h"
 
 #include <algorithm>
+#include <cstring>
+#include <iostream>
 
 #include "source/extensions.h"
 #include "source/latest_version_spirv_header.h"
@@ -140,13 +142,14 @@ spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
   // when the value is kSentinel.
   const auto kSentinel = uint32_t(-1);
   const NameValue needle{{}, kSentinel};
-  auto compare = [name](const NameValue& lhs, const NameValue& rhs) {
+  auto less = [name](const NameValue& lhs, const NameValue& rhs) {
     const char* lhs_chars = lhs.value == kSentinel ? name : getChars(lhs.name);
     const char* rhs_chars = rhs.value == kSentinel ? name : getChars(rhs.name);
     return std::strcmp(lhs_chars, rhs_chars) < 0;
   };
 
-  auto where = std::lower_bound(kInstructionNames.begin(), kInstructionNames.end(), needle, compare);
+  auto where = std::lower_bound(kInstructionNames.begin(),
+                                kInstructionNames.end(), needle, less);
   if (where != kInstructionNames.end() && std::strcmp(getChars(where->name), name) == 0) {
     return LookupOpcode(static_cast<spv::Op>(where->value), desc);
   }
@@ -219,14 +222,25 @@ spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
   // string to compare against when the value is kSentinel.
   const auto kSentinel = uint32_t(-1);
   const NameValue needle{{}, kSentinel};
-  auto compare = [name](const NameValue& lhs, const NameValue& rhs) {
+  // The strings in the global string table are null-terminated, and the count
+  // reflects that.  So always deduct 1 from its length.
+  auto less = [name, name_len](const NameValue& lhs, const NameValue& rhs) {
     const char* lhs_chars = lhs.value == kSentinel ? name : getChars(lhs.name);
     const char* rhs_chars = rhs.value == kSentinel ? name : getChars(rhs.name);
-    return std::strcmp(lhs_chars, rhs_chars) < 0;
+    const auto content_cmp = std::strncmp(lhs_chars, rhs_chars, name_len);
+    if (content_cmp != 0) {
+      return content_cmp < 0;
+    }
+    const auto lhs_len =
+        lhs.value == kSentinel ? name_len : lhs.name.count() - 1;
+    const auto rhs_len =
+        rhs.value == kSentinel ? name_len : rhs.name.count() - 1;
+    return lhs_len < rhs_len;
   };
 
-  auto where = std::lower_bound(span.begin(), span.end(), needle, compare);
-  if (where != span.end() && std::strcmp(getChars(where->name), name) == 0) {
+  auto where = std::lower_bound(span.begin(), span.end(), needle, less);
+  if (where != span.end() && where->name.count() - 1 == name_len &&
+      std::strncmp(getChars(where->name), name, name_len) == 0) {
     return LookupOperand(type, where->value, desc);
   }
   return SPV_ERROR_INVALID_LOOKUP;
