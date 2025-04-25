@@ -245,6 +245,8 @@ add_custom_target(spirv-tools-check-python-types
 	COMMAND mypy Table
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/utils
 )
+set_target_properties(spirv-tools-check-python-types
+  PROPERTIES EXCLUDE_FROM_ALL ON)
 
 # Run Python unit tests
 add_custom_target(spirv-tools-check-python-tests

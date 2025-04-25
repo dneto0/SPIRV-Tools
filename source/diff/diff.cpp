@@ -2799,20 +2799,14 @@ spv_result_t Differ::Output() {
   dst_id_to_.inst_map_.resize(id_map_.DstToSrcMap().IdBound(), nullptr);
 
   const spv_target_env target_env = SPV_ENV_UNIVERSAL_1_6;
-  spv_opcode_table opcode_table;
-  spv_operand_table operand_table;
   spv_ext_inst_table ext_inst_table;
   spv_result_t result;
-
-  result = spvOperandTableGet(&operand_table, target_env);
-  if (result != SPV_SUCCESS) return result;
 
   result = spvExtInstTableGet(&ext_inst_table, target_env);
   if (result != SPV_SUCCESS) return result;
 
   spv_context_t context{
       target_env,
-      operand_table,
       ext_inst_table,
   };
 
