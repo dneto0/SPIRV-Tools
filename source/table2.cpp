@@ -28,6 +28,18 @@
 namespace spvtools {
 namespace {
 
+// This is used in the source for the generated tables.
+constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
+  return IndexRange{first, count};
+}
+
+struct NameValue {
+  // Location of the null-terminated name in the global string table kStrings.
+  IndexRange name;
+  // Enum value in the binary format.
+  uint32_t value;
+};
+
 // The generated include file contains variables:
 //
 //   std::array<NameValue,...> kOperandNames:
@@ -82,12 +94,14 @@ IndexRange ExtensionToIndexRange(Extension extension);
 
 #include "core_tables.inc"
 
-} // anonymous namespace
-
+// Reeturns a pointer to the null-terminated C-style string in the global
+// strings table, as referenced by 'ir'.  Assumes the given range is valid.
 const char* getChars(IndexRange ir) {
   assert(ir.first() < sizeof(kStrings));
   return ir.apply(kStrings).data();
 }
+
+}  // anonymous namespace
 
 utils::Span<const spv_operand_type_t> OperandDesc::operands() const {
   return operands_range.apply(kOperandSpans);

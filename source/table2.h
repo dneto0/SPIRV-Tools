@@ -21,51 +21,43 @@
 #include "source/util/index_range.h"
 #include "spirv-tools/libspirv.hpp"
 
-// Define the static tables that describe the grammatical structure
-// of SPIR-V instructions and their operands. These tables are populated
-// by reading the grammar files from SPIRV-Headers.
+// Define the objects that describe the grammatical structure of SPIR-V
+// instructions and their operands. The objects are owned by static
+// tables populated at C++ build time from the grammar files from SPIRV-Headers.
 //
-// Most clients access these tables indirectly via an spv_context_t object.
+// Clients use freestanding methods to lookup an opcode or an operand, either
+// by numeric value (in the binary), or by name.
 //
-// It should be very fast, and require no memory allocations, to create
-// an spv_context_t object.
+// For historical reasons, the opcode lookup can also use a target enviroment
+// enum to filter for opcodes supported in that environment.
+//
 // It should be very fast for the system loader to load (and possibly relocate)
-// the tables.  In particular, there should be very few global symbols with
-// independent addresses. Prefer a very few large tables of items rather than
-// dozens or hundreds of global symbols.
+// the static tables.  In particular, there should be very few global symbols
+// with independent addresses. Prefer a very few large tables of items rather
+// than dozens or hundreds of global symbols.
 //
 // The overall structure among containers (i.e. skipping scalar data members)
 // is as follows:
 //
-//    An spv_context_t:
-//      - points to spv_opcode_table_t = array of spv_opcode_desc_t
-//      - points to spv_operand_table_t = array of spv_operand_desc_group_t
-//      - points to spv_ext_inst_table_t  = array of spv_ext_inst_group_t
+//    An OperandDesc describes an operand.
+//    An InstructionDesc desribes an instruction.
 //
-//    An spv_opcode_desc_t has:
+//    Both OperandDesc and InstructionDesc have members:
 //      - a name string
 //      - array of alias strings
-//      - array of spv::Capability      (an enum)
-//      - array of spv_operand_type_t   (an enum)
-//      - array of spvtools::Extension  (an enum)
+//      - array of spv::Capability      (as an enum)
+//      - array of spv_operand_type_t   (as an enum)
+//      - array of spvtools::Extension  (as an enum)
+//      - a minVersion
+//      - a lastVersion
 //
-//    An spv_operand_desc_group_t has:
-//      - array of spv_operand_desc_t:
+//    An OperandDesc also has:
+//      -  a uint32_t value.
 //
-//    An spv_operand_desc_t has:
-//      - a name string
-//      - array of alias strings
-//      - array of spv::Capability
-//      - array of spvtools::Extension
-//      - array of spv_operand_type_t
-//
-//    An spv_ext_inst_group_t has:
-//      - array of spv_ext_inst_desc_t
-//
-//    An spv_ext_inst_desc_t has:
-//      - a name string
-//      - array of spv::Capability
-//      - array of spv_operand_type_t
+//    An InstructionDesc also has:
+//      -  a spv::Op opcode
+//      -  a bool hasResult
+//      -  a bool hasType
 //
 // The arrays are represented by spans into a global static array, with one
 // array for each of:
@@ -76,21 +68,21 @@
 //      - spvtools::Extension
 //
 // Note: Currently alias lists never have more than one element.
+// The data structures and code do not assume this.
+
+// TODO(dneto): convert the tables for extended instructions, and extensions.
+// Currently (as defined in table.h):
+//    An spv_ext_inst_group_t has:
+//      - array of spv_ext_inst_desc_t
+//
+//    An spv_ext_inst_desc_t has:
+//      - a name string
+//      - array of spv::Capability
+//      - array of spv_operand_type_t
 
 namespace spvtools {
 
 using IndexRange = utils::IndexRange<uint32_t, uint32_t>;
-
-constexpr inline IndexRange IR(uint32_t first, uint32_t count) {
-  return IndexRange{first, count};
-}
-
-struct NameValue {
-  // Location of the null-terminated name in the global string table kStrings.
-  IndexRange name;
-  // Enum value in the binary format.
-  uint32_t value;
-};
 
 // Describes a SPIR-V operand.
 struct OperandDesc {
@@ -152,12 +144,8 @@ struct InstructionDesc {
   InstructionDesc(InstructionDesc&&) = delete;
 };
 
-// Returns a pointer to the null-terminated C-style string. Assumes the given
-// index range is valid.
-const char* getChars(IndexRange);
-
-// Finds the instruction description by opcode name, without the "Op" prefix.
-// On success, returns SPV_SUCCESS and updates *desc.
+// Finds the instruction description by opcode name. The name should not
+// have the "Op" prefix. On success, returns SPV_SUCCESS and updates *desc.
 spv_result_t LookupOpcode(const char* name, InstructionDesc** desc);
 // Finds the instruction description by opcode value.
 // On success, returns SPV_SUCCESS and updates *desc.
