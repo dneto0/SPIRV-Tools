@@ -16,6 +16,7 @@
 #define SOURCE_UTIL_INDEX_RANGE_H_
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 
 #include "source/util/span.h"
@@ -54,7 +55,7 @@ class IndexRange {
     return base ? span_type(base + first_, count_) : span_type();
   }
   template <typename E = int>
-  spvtools::utils::Span<E> apply(nullptr_t base) const {
+  spvtools::utils::Span<E> apply(std::nullptr_t base) const {
     using span_type = spvtools::utils::Span<E>;
     return span_type();
   }
