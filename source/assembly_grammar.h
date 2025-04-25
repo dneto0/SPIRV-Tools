@@ -54,12 +54,6 @@ class AssemblyGrammar {
   // Fills in the desc parameter with the information about the given
   // operand. Returns SPV_SUCCESS if the operand was found, and
   // SPV_ERROR_INVALID_LOOKUP otherwise.
-  spv_result_t lookupOperand(spv_operand_type_t type, const char* name,
-                             size_t name_len, spv_operand_desc* desc) const;
-
-  // Fills in the desc parameter with the information about the given
-  // operand. Returns SPV_SUCCESS if the operand was found, and
-  // SPV_ERROR_INVALID_LOOKUP otherwise.
   spv_result_t lookupOperand(spv_operand_type_t type, uint32_t operand,
                              spv_operand_desc* desc) const;
 

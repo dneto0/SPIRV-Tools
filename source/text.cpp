@@ -458,8 +458,8 @@ spv_result_t spvTextEncodeOperand(const spvtools::AssemblyGrammar& grammar,
     default: {
       // NOTE: All non literal operands are handled here using the operand
       // table.
-      spv_operand_desc entry;
-      if (grammar.lookupOperand(type, textValue, strlen(textValue), &entry)) {
+      spvtools::OperandDesc* entry = nullptr;
+      if (spvtools::LookupOperand(type, textValue, strlen(textValue), &entry)) {
         return context->diagnostic() << "Invalid " << spvOperandTypeStr(type)
                                      << " '" << textValue << "'.";
       }
@@ -469,7 +469,7 @@ spv_result_t spvTextEncodeOperand(const spvtools::AssemblyGrammar& grammar,
       }
 
       // Prepare to parse the operands for this logical operand.
-      spvPushOperandTypes(entry->operandTypes, pExpectedOperands);
+      spvPushOperandTypes(entry->operands(), pExpectedOperands);
     } break;
   }
   return SPV_SUCCESS;
