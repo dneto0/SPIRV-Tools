@@ -118,7 +118,7 @@ def generate_compressed_tables():
         outs = outs.values(),
         cmd = cmd,
         cmd_bat = cmd,
-        tools = [":generate_grammar_tables"],
+        tools = [":ggt"],
         visibility = ["//visibility:private"],
     )
 
