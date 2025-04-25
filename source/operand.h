@@ -69,9 +69,7 @@ void spvPushOperandTypes(
 // appear after operands for a more significant bit.
 //
 // If a set bit is unknown, then we assume it has no operands.
-void spvPushOperandTypesForMask(spv_target_env,
-                                const spv_operand_table operand_table,
-                                const spv_operand_type_t mask_type,
+void spvPushOperandTypesForMask(const spv_operand_type_t mask_type,
                                 const uint32_t mask,
                                 spv_operand_pattern_t* pattern);
 

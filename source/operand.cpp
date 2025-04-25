@@ -27,26 +27,7 @@
 #include "source/opcode.h"
 #include "source/spirv_constant.h"
 #include "source/table2.h"
-
-// For now, assume unified1 contains up to SPIR-V 1.3 and no later
-// SPIR-V version.
-// TODO(dneto): Make one set of tables, but with version tags on a
-// per-item basis. https://github.com/KhronosGroup/SPIRV-Tools/issues/1195
-
-#include "operand.kinds-unified1.inc"
 #include "spirv-tools/libspirv.h"
-
-static const spv_operand_table_t kOperandTable = {
-    ARRAY_SIZE(pygen_variable_OperandInfoTable),
-    pygen_variable_OperandInfoTable};
-
-spv_result_t spvOperandTableGet(spv_operand_table* pOperandTable,
-                                spv_target_env) {
-  if (!pOperandTable) return SPV_ERROR_INVALID_POINTER;
-
-  *pOperandTable = &kOperandTable;
-  return SPV_SUCCESS;
-}
 
 const char* spvOperandTypeStr(spv_operand_type_t type) {
   switch (type) {
@@ -258,9 +239,7 @@ void spvPushOperandTypes(
   }
 }
 
-void spvPushOperandTypesForMask(spv_target_env env,
-                                const spv_operand_table operandTable,
-                                const spv_operand_type_t type,
+void spvPushOperandTypesForMask(const spv_operand_type_t type,
                                 const uint32_t mask,
                                 spv_operand_pattern_t* pattern) {
   // Scan from highest bits to lowest bits because we will append in LIFO

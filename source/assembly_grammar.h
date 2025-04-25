@@ -30,7 +30,6 @@ class AssemblyGrammar {
  public:
   explicit AssemblyGrammar(const spv_const_context context)
       : target_env_(context->target_env),
-        operandTable_(context->operand_table),
         extInstTable_(context->ext_inst_table) {}
 
   // Returns true if the internal tables have been initialized with valid data.
@@ -108,7 +107,6 @@ class AssemblyGrammar {
 
  private:
   const spv_target_env target_env_;
-  const spv_operand_table operandTable_;
   const spv_ext_inst_table extInstTable_;
 };
 

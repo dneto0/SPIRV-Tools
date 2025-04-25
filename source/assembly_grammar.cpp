@@ -36,15 +36,12 @@ namespace {
 ///
 /// On success, the value is written to pValue.
 ///
-/// @param[in] operandTable operand lookup table
 /// @param[in] type of the operand
 /// @param[in] textValue word of text to be parsed
 /// @param[out] pValue where the resulting value is written
 ///
 /// @return result code
-spv_result_t spvTextParseMaskOperand(spv_target_env env,
-                                     const spv_operand_table operandTable,
-                                     const spv_operand_type_t type,
+spv_result_t spvTextParseMaskOperand(const spv_operand_type_t type,
                                      const char* textValue, uint32_t* pValue) {
   if (textValue == nullptr) return SPV_ERROR_INVALID_TEXT;
   size_t text_length = strlen(textValue);
@@ -171,7 +168,7 @@ const size_t kNumOpSpecConstantOpcodes =
 
 }  // namespace
 
-bool AssemblyGrammar::isValid() const { return operandTable_ && extInstTable_; }
+bool AssemblyGrammar::isValid() const { return extInstTable_; }
 
 CapabilitySet AssemblyGrammar::filterCapsAgainstTargetEnv(
     const spv::Capability* cap_array, uint32_t count) const {
@@ -230,8 +227,7 @@ spv_result_t AssemblyGrammar::lookupSpecConstantOpcode(spv::Op opcode) const {
 spv_result_t AssemblyGrammar::parseMaskOperand(const spv_operand_type_t type,
                                                const char* textValue,
                                                uint32_t* pValue) const {
-  return spvTextParseMaskOperand(target_env_, operandTable_, type, textValue,
-                                 pValue);
+  return spvTextParseMaskOperand(type, textValue, pValue);
 }
 spv_result_t AssemblyGrammar::lookupExtInst(spv_ext_inst_type_t type,
                                             const char* textValue,
@@ -248,7 +244,7 @@ spv_result_t AssemblyGrammar::lookupExtInst(spv_ext_inst_type_t type,
 void AssemblyGrammar::pushOperandTypesForMask(
     const spv_operand_type_t type, const uint32_t mask,
     spv_operand_pattern_t* pattern) const {
-  spvPushOperandTypesForMask(target_env_, operandTable_, type, mask, pattern);
+  spvPushOperandTypesForMask(type, mask, pattern);
 }
 
 }  // namespace spvtools
