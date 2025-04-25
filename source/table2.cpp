@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Compressed grammar tables.
+
 #include "source/table2.h"
 
 #include <algorithm>
