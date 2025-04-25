@@ -229,7 +229,7 @@ void spvPushOperandTypes(
     spv_operand_pattern_t* pattern) {
   // Push them on in backward order.
   auto n = types.size();
-  for (auto i = 0; i < n; i++) {
+  for (auto i = 0u; i < n; i++) {
     auto type = types[n - 1 - i];
     // Check against the NONE type, in case the tables have them.
     // This might be cleaned up.
