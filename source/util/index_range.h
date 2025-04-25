@@ -16,6 +16,7 @@
 #define SOURCE_UTIL_INDEX_RANGE_H_
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 
 #include "source/util/span.h"
