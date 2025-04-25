@@ -171,7 +171,8 @@ spv_result_t LookupOpcode(const char* name, InstructionDesc** desc) {
   return SPV_ERROR_INVALID_LOOKUP;
 }
 
-static template <typename KEY_TYPE>
+namespace {
+template <typename KEY_TYPE>
 spv_result_t LookupOpcodeForEnvInternal(spv_target_env env, KEY_TYPE key,
                                         InstructionDesc** desc) {
   InstructionDesc* desc_proxy;
@@ -189,6 +190,7 @@ spv_result_t LookupOpcodeForEnvInternal(spv_target_env env, KEY_TYPE key,
   }
   return SPV_ERROR_INVALID_LOOKUP;
 }
+}  // namespace
 
 spv_result_t LookupOpcodeForEnv(spv_target_env env, const char* name,
                                 InstructionDesc** desc) {
