@@ -32,7 +32,7 @@ py_binary(
 )
 
 py_binary(
-    name = "generate_compressed_grammar_tables",
+    name = "ggt",
     srcs = ["utils/ggt.py"],
 )
 

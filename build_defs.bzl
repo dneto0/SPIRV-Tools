@@ -105,7 +105,7 @@ def generate_compressed_tables():
     )
 
     cmd = (
-        "$(location :generate_compressed_grammar_tables)" +
+        "$(location :ggt)" +
         " --spirv-core-grammar=$(location {core_grammar})" +
         " --extinst-debuginfo-grammar=$(location {debuginfo_grammar})" +
         " --extinst-cldebuginfo100-grammar=$(location {cldebuginfo_grammar})" +
