@@ -93,7 +93,7 @@ def generate_core_tables(version):
         visibility = ["//visibility:private"],
     )
 
-def generate_compressed_tables(version):
+def generate_compressed_tables():
     grammars = dict(
         core_grammar = SPIRV_CORE_GRAMMAR_JSON_FILE,
         debuginfo_grammar = DEBUGINFO_GRAMMAR_JSON_FILE,
