@@ -23,6 +23,7 @@
 #include "source/operand.h"
 #include "source/spirv_target_env.h"
 #include "source/table.h"
+#include "source/table2.h"
 
 namespace spvtools {
 namespace {
@@ -177,14 +178,15 @@ CapabilitySet AssemblyGrammar::filterCapsAgainstTargetEnv(
   CapabilitySet cap_set;
   const auto version = spvVersionForTargetEnv(target_env_);
   for (uint32_t i = 0; i < count; ++i) {
-    spv_operand_desc entry = {};
-    if (SPV_SUCCESS == lookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
-                                     static_cast<uint32_t>(cap_array[i]),
-                                     &entry)) {
+    spvtools::OperandDesc* entry = nullptr;
+    if (SPV_SUCCESS ==
+        spvtools::LookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
+                                static_cast<uint32_t>(cap_array[i]), &entry)) {
       // This token is visible in this environment if it's in an appropriate
       // core version, or it is enabled by a capability or an extension.
       if ((version >= entry->minVersion && version <= entry->lastVersion) ||
-          entry->numExtensions > 0u || entry->numCapabilities > 0u) {
+          entry->extensions_range.count() > 0u ||
+          entry->capabilities_range.count() > 0u) {
         cap_set.insert(cap_array[i]);
       }
     }
@@ -192,11 +194,13 @@ CapabilitySet AssemblyGrammar::filterCapsAgainstTargetEnv(
   return cap_set;
 }
 
-spv_result_t AssemblyGrammar::lookupOperand(spv_operand_type_t type,
-                                            uint32_t operand,
-                                            spv_operand_desc* desc) const {
-  return spvOperandTableValueLookup(target_env_, operandTable_, type, operand,
-                                    desc);
+const char* AssemblyGrammar::lookupOperandName(spv_operand_type_t type,
+                                               uint32_t operand) const {
+  spvtools::OperandDesc* desc = nullptr;
+  if (spvtools::LookupOperand(type, operand, &desc) != SPV_SUCCESS || !desc) {
+    return "Unknown";
+  }
+  return desc->name().data();
 }
 
 spv_result_t AssemblyGrammar::lookupSpecConstantOpcode(const char* name,

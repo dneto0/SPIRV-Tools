@@ -130,8 +130,8 @@ class TrimCapabilitiesPass : public Pass {
 
  private:
   // Inserts every capability listed by `descriptor` this pass supports into
-  // `output`. Expects a Descriptor like `spv_opcode_desc_t` or
-  // `spv_operand_desc_t`.
+  // `output`. Expects a Descriptor like spvtools::OperandDesc or
+  // spvtools::InstructionDesc.
   template <class Descriptor>
   inline void addSupportedCapabilitiesToSet(const Descriptor* const descriptor,
                                             CapabilitySet* output) const {
@@ -153,24 +153,23 @@ class TrimCapabilitiesPass : public Pass {
       }
     }
   }
+  template <>
+  inline void addSupportedCapabilitiesToSet<spvtools::OperandDesc>(
+      const spvtools::OperandDesc* const descriptor,
+      CapabilitySet* output) const {
+    for (auto capability : descriptor->capabilities()) {
+      if (supportedCapabilities_.contains(capability)) {
+        output->insert(capability);
+      }
+    }
+  }
 
   // Inserts every extension listed by `descriptor` required by the module into
-  // `output`. Expects a Descriptor like `spv_opcode_desc_t` or
-  // `spv_operand_desc_t`.
+  // `output`. Expects a Descriptor like spvtools::OperandDesc or
+  // spvtools::InstructionDesc.
   template <class Descriptor>
   inline void addSupportedExtensionsToSet(const Descriptor* const descriptor,
                                           ExtensionSet* output) const {
-    if (descriptor->minVersion <=
-        spvVersionForTargetEnv(context()->GetTargetEnv())) {
-      return;
-    }
-    output->insert(descriptor->extensions,
-                   descriptor->extensions + descriptor->numExtensions);
-  }
-  template <>
-  inline void addSupportedExtensionsToSet<spvtools::InstructionDesc>(
-      const spvtools::InstructionDesc* const descriptor,
-      ExtensionSet* output) const {
     if (descriptor->minVersion <=
         spvVersionForTargetEnv(context()->GetTargetEnv())) {
       return;

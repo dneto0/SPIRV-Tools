@@ -451,16 +451,16 @@ namespace {
 ExtensionSet getExtensionsRelatedTo(const CapabilitySet& capabilities,
                                     const AssemblyGrammar& grammar) {
   ExtensionSet output;
-  const spv_operand_desc_t* desc = nullptr;
+  spvtools::OperandDesc* desc = nullptr;
   for (auto capability : capabilities) {
-    if (SPV_SUCCESS != grammar.lookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
-                                             static_cast<uint32_t>(capability),
-                                             &desc)) {
+    if (SPV_SUCCESS !=
+        spvtools::LookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
+                                static_cast<uint32_t>(capability), &desc)) {
       continue;
     }
 
-    for (uint32_t i = 0; i < desc->numExtensions; ++i) {
-      output.insert(desc->extensions[i]);
+    for (auto extension : desc->extensions()) {
+      output.insert(extension);
     }
   }
 
@@ -552,9 +552,9 @@ void TrimCapabilitiesPass::addInstructionRequirementsForOperand(
 
   // case 1: Operand is a single value, can directly lookup.
   if (!spvOperandIsConcreteMask(operand.type)) {
-    const spv_operand_desc_t* desc = {};
-    auto result = context()->grammar().lookupOperand(operand.type,
-                                                     operand.words[0], &desc);
+    spvtools::OperandDesc* desc = nullptr;
+    auto result =
+        spvtools::LookupOperand(operand.type, operand.words[0], &desc);
     if (result != SPV_SUCCESS) {
       return;
     }
@@ -570,8 +570,8 @@ void TrimCapabilitiesPass::addInstructionRequirementsForOperand(
       continue;
     }
 
-    const spv_operand_desc_t* desc = {};
-    auto result = context()->grammar().lookupOperand(operand.type, mask, &desc);
+    spvtools::OperandDesc* desc = nullptr;
+    auto result = spvtools::LookupOperand(operand.type, mask, &desc);
     if (result != SPV_SUCCESS) {
       continue;
     }
@@ -649,8 +649,8 @@ void TrimCapabilitiesPass::addInstructionRequirements(
 void TrimCapabilitiesPass::AddExtensionsForOperand(
     const spv_operand_type_t type, const uint32_t value,
     ExtensionSet* extensions) const {
-  const spv_operand_desc_t* desc = nullptr;
-  spv_result_t result = context()->grammar().lookupOperand(type, value, &desc);
+  spvtools::OperandDesc* desc = nullptr;
+  spv_result_t result = spvtools::LookupOperand(type, value, &desc);
   if (result != SPV_SUCCESS) {
     return;
   }

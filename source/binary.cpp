@@ -688,19 +688,19 @@ spv_result_t Parser::parseOperand(size_t inst_offset,
       if (type == SPV_OPERAND_TYPE_OPTIONAL_FPENCODING)
         parsed_operand.type = SPV_OPERAND_TYPE_FPENCODING;
 
-      spv_operand_desc entry;
-      if (grammar_.lookupOperand(type, word, &entry)) {
+      spvtools::OperandDesc* entry = nullptr;
+      if (spvtools::LookupOperand(type, word, &entry)) {
         return diagnostic()
                << "Invalid " << spvOperandTypeStr(parsed_operand.type)
                << " operand: " << word;
       }
       // Prepare to accept operands to this operand, if needed.
-      spvPushOperandTypes(entry->operandTypes, expected_operands);
+      spvPushOperandTypes(entry->operands(), expected_operands);
     } break;
 
     case SPV_OPERAND_TYPE_SOURCE_LANGUAGE: {
-      spv_operand_desc entry;
-      if (grammar_.lookupOperand(type, word, &entry)) {
+      spvtools::OperandDesc* entry = nullptr;
+      if (spvtools::LookupOperand(type, word, &entry)) {
         return diagnostic()
                << "Invalid " << spvOperandTypeStr(parsed_operand.type)
                << " operand: " << word
@@ -710,7 +710,7 @@ spv_result_t Parser::parseOperand(size_t inst_offset,
                   "SPIRV-Headers";
       }
       // Prepare to accept operands to this operand, if needed.
-      spvPushOperandTypes(entry->operandTypes, expected_operands);
+      spvPushOperandTypes(entry->operands(), expected_operands);
     } break;
 
     case SPV_OPERAND_TYPE_FP_FAST_MATH_MODE:
@@ -754,23 +754,23 @@ spv_result_t Parser::parseOperand(size_t inst_offset,
       uint32_t remaining_word = word;
       for (uint32_t mask = (1u << 31); remaining_word; mask >>= 1) {
         if (remaining_word & mask) {
-          spv_operand_desc entry;
-          if (grammar_.lookupOperand(type, mask, &entry)) {
+          spvtools::OperandDesc* entry = nullptr;
+          if (spvtools::LookupOperand(type, mask, &entry)) {
             return diagnostic()
                    << "Invalid " << spvOperandTypeStr(parsed_operand.type)
                    << " operand: " << word << " has invalid mask component "
                    << mask;
           }
           remaining_word ^= mask;
-          spvPushOperandTypes(entry->operandTypes, expected_operands);
+          spvPushOperandTypes(entry->operands(), expected_operands);
         }
       }
       if (word == 0) {
         // An all-zeroes mask *might* also be valid.
-        spv_operand_desc entry;
-        if (SPV_SUCCESS == grammar_.lookupOperand(type, 0, &entry)) {
+        spvtools::OperandDesc* entry = nullptr;
+        if (SPV_SUCCESS == spvtools::LookupOperand(type, 0, &entry)) {
           // Prepare for its operands, if any.
-          spvPushOperandTypes(entry->operandTypes, expected_operands);
+          spvPushOperandTypes(entry->operands(), expected_operands);
         }
       }
     } break;

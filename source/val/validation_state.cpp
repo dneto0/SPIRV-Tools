@@ -23,6 +23,7 @@
 #include "source/opcode.h"
 #include "source/spirv_constant.h"
 #include "source/spirv_target_env.h"
+#include "source/table2.h"
 #include "source/util/make_unique.h"
 #include "source/val/basic_block.h"
 #include "source/val/construct.h"
@@ -367,11 +368,11 @@ void ValidationState_t::RegisterCapability(spv::Capability cap) {
   if (module_capabilities_.contains(cap)) return;
 
   module_capabilities_.insert(cap);
-  spv_operand_desc desc;
-  if (SPV_SUCCESS == grammar_.lookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
-                                            uint32_t(cap), &desc)) {
-    for (auto capability :
-         CapabilitySet(desc->numCapabilities, desc->capabilities)) {
+  spvtools::OperandDesc* desc = nullptr;
+  if (SPV_SUCCESS == spvtools::LookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
+                                             uint32_t(cap), &desc)) {
+    for (auto capability : CapabilitySet(desc->capabilities_range.count(),
+                                         desc->capabilities().data())) {
       RegisterCapability(capability);
     }
   }

@@ -26,6 +26,7 @@
 #include "source/macro.h"
 #include "source/opcode.h"
 #include "source/spirv_constant.h"
+#include "source/table2.h"
 
 // For now, assume unified1 contains up to SPIR-V 1.3 and no later
 // SPIR-V version.
@@ -350,10 +351,9 @@ void spvPushOperandTypesForMask(spv_target_env env,
   for (uint32_t candidate_bit = (1u << 31u); candidate_bit;
        candidate_bit >>= 1) {
     if (candidate_bit & mask) {
-      spv_operand_desc entry = nullptr;
-      if (SPV_SUCCESS == spvOperandTableValueLookup(env, operandTable, type,
-                                                    candidate_bit, &entry)) {
-        spvPushOperandTypes(entry->operandTypes, pattern);
+      spvtools::OperandDesc* entry = nullptr;
+      if (SPV_SUCCESS == spvtools::LookupOperand(type, candidate_bit, &entry)) {
+        spvPushOperandTypes(entry->operands(), pattern);
       }
     }
   }

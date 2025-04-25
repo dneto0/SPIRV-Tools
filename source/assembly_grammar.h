@@ -51,22 +51,10 @@ class AssemblyGrammar {
     return filterCapsAgainstTargetEnv(caps.begin(), caps.size());
   }
 
-  // Fills in the desc parameter with the information about the given
-  // operand. Returns SPV_SUCCESS if the operand was found, and
-  // SPV_ERROR_INVALID_LOOKUP otherwise.
-  spv_result_t lookupOperand(spv_operand_type_t type, uint32_t operand,
-                             spv_operand_desc* desc) const;
-
   // Finds operand entry in the grammar table and returns its name.
   // Returns "Unknown" if not found.
   const char* lookupOperandName(spv_operand_type_t type,
-                                uint32_t operand) const {
-    spv_operand_desc desc = nullptr;
-    if (lookupOperand(type, operand, &desc) != SPV_SUCCESS || !desc) {
-      return "Unknown";
-    }
-    return desc->name;
-  }
+                                uint32_t operand) const;
 
   // Finds the opcode for the given OpSpecConstantOp opcode name. The name
   // should not have the "Op" prefix.  For example, "IAdd" corresponds to

@@ -18,6 +18,7 @@
 
 #include "source/opcode.h"
 #include "source/spirv_target_env.h"
+#include "source/table2.h"
 #include "source/val/instruction.h"
 #include "source/val/validate.h"
 #include "source/val/validation_state.h"
@@ -926,11 +927,11 @@ spv_result_t ValidateDuplicateExecutionModes(ValidationState_t& _) {
   std::set<PerOperandKey> seen_per_operand;
 
   const auto lookupMode = [&_](spv::ExecutionMode mode) -> std::string {
-    spv_operand_desc desc = nullptr;
-    if (_.grammar().lookupOperand(SPV_OPERAND_TYPE_EXECUTION_MODE,
-                                  static_cast<uint32_t>(mode),
-                                  &desc) == SPV_SUCCESS) {
-      return std::string(desc->name);
+    spvtools::OperandDesc* desc = nullptr;
+    if (spvtools::LookupOperand(SPV_OPERAND_TYPE_EXECUTION_MODE,
+                                static_cast<uint32_t>(mode),
+                                &desc) == SPV_SUCCESS) {
+      return std::string(desc->name().data());
     }
     return "Unknown";
   };

@@ -40,10 +40,10 @@ std::string ToString(const CapabilitySet& capabilities,
                      const AssemblyGrammar& grammar) {
   std::stringstream ss;
   for (auto capability : capabilities) {
-    spv_operand_desc desc;
-    if (SPV_SUCCESS == grammar.lookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
-                                             uint32_t(capability), &desc))
-      ss << desc->name << " ";
+    spvtools::OperandDesc* desc = nullptr;
+    if (SPV_SUCCESS == spvtools::LookupOperand(SPV_OPERAND_TYPE_CAPABILITY,
+                                               uint32_t(capability), &desc))
+      ss << desc->name().data() << " ";
     else
       ss << uint32_t(capability) << " ";
   }
@@ -88,7 +88,7 @@ CapabilitySet EnablingCapabilitiesForOp(const ValidationState_t& state,
 // return an error code.
 spv_result_t OperandVersionExtensionCheck(
     ValidationState_t& _, const Instruction* inst, size_t which_operand,
-    const spv_operand_desc_t& operand_desc, uint32_t word) {
+    const spvtools::OperandDesc& operand_desc, uint32_t word) {
   const uint32_t module_version = _.version();
   const uint32_t operand_min_version = operand_desc.minVersion;
   const uint32_t operand_last_version = operand_desc.lastVersion;
@@ -105,27 +105,29 @@ spv_result_t OperandVersionExtensionCheck(
     return _.diag(SPV_ERROR_WRONG_VERSION, inst)
            << spvtools::utils::CardinalToOrdinal(which_operand)
            << " operand of " << spvOpcodeString(inst->opcode()) << ": operand "
-           << operand_desc.name << "(" << word << ") requires SPIR-V version "
+           << operand_desc.name().data() << "(" << word
+           << ") requires SPIR-V version "
            << SPV_SPIRV_VERSION_MAJOR_PART(operand_last_version) << "."
            << SPV_SPIRV_VERSION_MINOR_PART(operand_last_version)
            << " or earlier";
   }
 
-  if (!reserved && operand_desc.numExtensions == 0) {
+  if (!reserved && operand_desc.extensions_range.empty()) {
     return _.diag(SPV_ERROR_WRONG_VERSION, inst)
            << spvtools::utils::CardinalToOrdinal(which_operand)
            << " operand of " << spvOpcodeString(inst->opcode()) << ": operand "
-           << operand_desc.name << "(" << word << ") requires SPIR-V version "
+           << operand_desc.name().data() << "(" << word
+           << ") requires SPIR-V version "
            << SPV_SPIRV_VERSION_MAJOR_PART(operand_min_version) << "."
            << SPV_SPIRV_VERSION_MINOR_PART(operand_min_version) << " or later";
   } else {
-    ExtensionSet required_extensions(operand_desc.numExtensions,
-                                     operand_desc.extensions);
+    ExtensionSet required_extensions(operand_desc.extensions_range.count(),
+                                     operand_desc.extensions().data());
     if (!_.HasAnyOfExtensions(required_extensions)) {
       return _.diag(SPV_ERROR_MISSING_EXTENSION, inst)
              << spvtools::utils::CardinalToOrdinal(which_operand)
              << " operand of " << spvOpcodeString(inst->opcode())
-             << ": operand " << operand_desc.name << "(" << word
+             << ": operand " << operand_desc.name().data() << "(" << word
              << ") requires one of these extensions: "
              << ExtensionSetToString(required_extensions);
     }
@@ -168,9 +170,9 @@ spv_result_t CheckRequiredCapabilities(ValidationState_t& state,
   }
 
   CapabilitySet enabling_capabilities;
-  spv_operand_desc operand_desc = nullptr;
+  spvtools::OperandDesc* operand_desc = nullptr;
   const auto lookup_result =
-      state.grammar().lookupOperand(operand.type, word, &operand_desc);
+      spvtools::LookupOperand(operand.type, word, &operand_desc);
   if (lookup_result == SPV_SUCCESS) {
     // Allow FPRoundingMode decoration if requested.
     if (operand.type == SPV_OPERAND_TYPE_DECORATION &&
@@ -188,7 +190,7 @@ spv_result_t CheckRequiredCapabilities(ValidationState_t& state,
       }
     } else {
       enabling_capabilities = state.grammar().filterCapsAgainstTargetEnv(
-          operand_desc->capabilities, operand_desc->numCapabilities);
+          operand_desc->capabilities());
     }
 
     // When encountering an OpCapability instruction, the instruction pass
