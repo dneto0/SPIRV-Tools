@@ -5,7 +5,7 @@ load(
     "DEBUGINFO_GRAMMAR_JSON_FILE",
     "SHDEBUGINFO100_GRAMMAR_JSON_FILE",
     "TEST_COPTS",
-    "generate_core_tables",
+    "generate_compressed_tables",
     "generate_enum_string_mapping",
     "generate_extinst_lang_headers",
     "generate_vendor_tables",
@@ -32,11 +32,16 @@ py_binary(
 )
 
 py_binary(
+    name = "generate_compressed_grammar_tables",
+    srcs = ["utils/ggt.py"],
+)
+
+py_binary(
     name = "generate_language_headers",
     srcs = ["utils/generate_language_headers.py"],
 )
 
-generate_core_tables(version = "unified1")
+generate_compressed_tables()
 
 generate_enum_string_mapping(version = "unified1")
 
@@ -142,7 +147,7 @@ cc_library(
         "source/val/*.cpp",
     ]) + [
         ":build_version_inc",
-        ":gen_core_tables_unified1",
+        ":gen_compressed_tables",
         ":gen_enum_string_mapping",
         ":gen_extinst_lang_headers_DebugInfo",
         ":gen_extinst_lang_headers_NonSemanticShaderDebugInfo100",
