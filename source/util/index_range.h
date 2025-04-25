@@ -55,7 +55,7 @@ class IndexRange {
     return base ? span_type(base + first_, count_) : span_type();
   }
   template <typename E = int>
-  spvtools::utils::Span<E> apply(std::nullptr_t base) const {
+  spvtools::utils::Span<E> apply(std::nullptr_t) const {
     using span_type = spvtools::utils::Span<E>;
     return span_type();
   }
