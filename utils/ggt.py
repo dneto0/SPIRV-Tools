@@ -378,7 +378,7 @@ struct OperandDesc {
 // are sorted by value within that span.
 // An optional variant of a kind maps to the details for the corresponding
 // concrete operand kind.""")
-        parts.append("static IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {")
+        parts.append("IndexRange OperandByValueRangeForKind(spv_operand_type_t type) {\n  switch(type) {")
         for kind_key, ir in operands_by_value_by_kind.items():
             parts.append("    case {}: return {};".format(
                 kind_key,
