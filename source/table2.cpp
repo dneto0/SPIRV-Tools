@@ -16,6 +16,7 @@
 #include "source/table2.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <iostream>
 
