@@ -47,7 +47,8 @@ class AssemblyGrammar {
   // returns the rest.
   CapabilitySet filterCapsAgainstTargetEnv(
       const spvtools::utils::Span<const spv::Capability>& caps) const {
-    return filterCapsAgainstTargetEnv(caps.begin(), caps.size());
+    return filterCapsAgainstTargetEnv(caps.begin(),
+                                      static_cast<uint32_t>(caps.size()));
   }
 
   // Finds operand entry in the grammar table and returns its name.
