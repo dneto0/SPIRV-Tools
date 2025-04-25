@@ -38,30 +38,6 @@ add_custom_command(OUTPUT ${CORE_TABLES_INC_FILE}
     COMMENT "Generate core tables")
 add_custom_target(spirv-tools-tables DEPENDS ${CORE_TABLES_INC_FILE})
 
-# macro() definitions are used in the following because we need to append .inc
-# file paths into some global lists (*_CPP_DEPENDS). And those global lists are
-# later used by set_source_files_properties() calls.
-# function() definitions are not suitable because they create new scopes.
-macro(spvtools_core_tables CONFIG_VERSION)
-  set(GRAMMAR_JSON_FILE "${SPIRV_HEADER_INCLUDE_DIR}/spirv/${CONFIG_VERSION}/spirv.core.grammar.json")
-  set(GRAMMAR_INSTS_INC_FILE "${spirv-tools_BINARY_DIR}/core.insts-${CONFIG_VERSION}.inc")
-  set(GRAMMAR_KINDS_INC_FILE "${spirv-tools_BINARY_DIR}/operand.kinds-${CONFIG_VERSION}.inc")
-  add_custom_command(OUTPUT ${GRAMMAR_INSTS_INC_FILE} ${GRAMMAR_KINDS_INC_FILE}
-    COMMAND Python3::Interpreter ${GRAMMAR_PROCESSING_SCRIPT}
-      --spirv-core-grammar=${GRAMMAR_JSON_FILE}
-      --extinst-debuginfo-grammar=${DEBUGINFO_GRAMMAR_JSON_FILE}
-      --extinst-cldebuginfo100-grammar=${CLDEBUGINFO100_GRAMMAR_JSON_FILE}
-      --core-insts-output=${GRAMMAR_INSTS_INC_FILE}
-      --operand-kinds-output=${GRAMMAR_KINDS_INC_FILE}
-    DEPENDS ${GRAMMAR_PROCESSING_SCRIPT}
-            ${GRAMMAR_JSON_FILE}
-            ${DEBUGINFO_GRAMMAR_JSON_FILE}
-            ${CLDEBUGINFO100_GRAMMAR_JSON_FILE}
-    COMMENT "Generate info tables for SPIR-V ${CONFIG_VERSION} core instructions and operands.")
-  list(APPEND OPCODE_CPP_DEPENDS ${GRAMMAR_INSTS_INC_FILE})
-  list(APPEND OPERAND_CPP_DEPENDS ${GRAMMAR_KINDS_INC_FILE})
-endmacro(spvtools_core_tables)
-
 macro(spvtools_enum_string_mapping CONFIG_VERSION)
   set(GRAMMAR_JSON_FILE "${SPIRV_HEADER_INCLUDE_DIR}/spirv/${CONFIG_VERSION}/spirv.core.grammar.json")
   set(GRAMMAR_EXTENSION_ENUM_INC_FILE "${spirv-tools_BINARY_DIR}/extension_enum.inc")
@@ -131,7 +107,6 @@ macro(spvtools_extinst_lang_headers NAME GRAMMAR_FILE)
   list(APPEND EXTINST_CPP_DEPENDS spirv-tools-header-${NAME})
 endmacro(spvtools_extinst_lang_headers)
 
-spvtools_core_tables("unified1")
 spvtools_enum_string_mapping("unified1")
 spvtools_vendor_tables("glsl.std.450" "glsl" "")
 spvtools_vendor_tables("opencl.std.100" "opencl" "")
