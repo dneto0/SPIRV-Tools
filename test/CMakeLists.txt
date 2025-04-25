@@ -122,6 +122,7 @@ set(TEST_SOURCES
   opcode_require_capabilities_test.cpp
   opcode_split_test.cpp
   operand_capabilities_test.cpp
+  operand_lookup_test.cpp
   operand_test.cpp
   operand_pattern_test.cpp
   parse_number_test.cpp

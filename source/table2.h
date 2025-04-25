@@ -94,22 +94,22 @@ struct NameValue {
 
 // Describes a SPIR-V operand.
 struct OperandDesc {
-  uint32_t value;
+  const uint32_t value;
 
-  IndexRange operands_range;      // Indexes kOperandSpans
-  IndexRange name_range;          // Indexes kStrings
-  IndexRange aliases_range;       // Indexes kAliasSpans
-  IndexRange capabilities_range;  // Indexes kCapabilitySpans
+  const IndexRange operands_range;      // Indexes kOperandSpans
+  const IndexRange name_range;          // Indexes kStrings
+  const IndexRange aliases_range;       // Indexes kAliasSpans
+  const IndexRange capabilities_range;  // Indexes kCapabilitySpans
   // A set of extensions that enable this feature. If empty then this operand
   // value is in core and its availability is subject to minVersion. The
   // assembler, binary parser, and disassembler ignore this rule, so you can
   // freely process invalid modules.
-  IndexRange extensions_range;  // Indexes kExtensionSpans
+  const IndexRange extensions_range;  // Indexes kExtensionSpans
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
-  uint32_t minVersion;
-  uint32_t lastVersion;
+  const uint32_t minVersion;
+  const uint32_t lastVersion;
   utils::Span<const spv_operand_type_t> operands() const;
   utils::Span<const char> name() const;
   utils::Span<const IndexRange> aliases() const;
@@ -138,8 +138,8 @@ struct InstructionDesc {
   // Minimal core SPIR-V version required for this feature, if without
   // extensions. ~0u means reserved for future use. ~0u and non-empty
   // extension lists means only available in extensions.
-  uint32_t minVersion;
-  uint32_t lastVersion;
+  const uint32_t minVersion;
+  const uint32_t lastVersion;
   // Returns the span of elements in the global grammar tables corresponding
   // to the privately-stored index ranges
   utils::Span<const spv_operand_type_t> operands() const;
