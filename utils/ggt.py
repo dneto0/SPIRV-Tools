@@ -23,6 +23,11 @@ import os.path
 import re
 import sys
 
+# Find modules relative to the directory containing this script.
+# This is needed for hermetic Bazel builds, where the Table files are bundled
+# together with this script, while keeping their relative locations.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from Table.Context import Context
 from Table.IndexRange import IndexRange
 from Table.Operand import Operand
