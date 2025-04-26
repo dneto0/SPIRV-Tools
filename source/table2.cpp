@@ -268,7 +268,7 @@ spv_result_t LookupOperand(spv_operand_type_t type, const char* name,
 
 namespace to_be_used {
 void functions_to_be_used() {
-  auto x = ExtensionToIndexRange(spvtools::kSPV_AMD_shader_ballot);
+  (void)ExtensionToIndexRange(spvtools::kSPV_AMD_shader_ballot);
 }
 }  // namespace to_be_used
 

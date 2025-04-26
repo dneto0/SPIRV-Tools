@@ -26,7 +26,6 @@
 #include <utility>
 #include <vector>
 
-#include "source/assembly_grammar.h"
 #include "source/diagnostic.h"
 #include "source/opt/build_module.h"
 #include "source/opt/compact_ids_pass.h"
@@ -104,7 +103,6 @@ spv_result_t GenerateHeader(const MessageConsumer& consumer,
 // |linked_context| should not be null.
 spv_result_t MergeModules(const MessageConsumer& consumer,
                           const std::vector<Module*>& in_modules,
-                          const AssemblyGrammar& grammar,
                           IRContext* linked_context);
 
 // Compute all pairs of import and export and return it in |linkings_to_do|.
@@ -247,7 +245,6 @@ spv_result_t GenerateHeader(const MessageConsumer& consumer,
 
 spv_result_t MergeModules(const MessageConsumer& consumer,
                           const std::vector<Module*>& input_modules,
-                          const AssemblyGrammar& grammar,
                           IRContext* linked_context) {
   spv_position_t position = {};
 
@@ -870,8 +867,7 @@ spv_result_t Link(const Context& context, const uint32_t* const* binaries,
   linked_context.module()->SetHeader(header);
 
   // Phase 3: Merge all the binaries into a single one.
-  AssemblyGrammar grammar(c_context);
-  res = MergeModules(consumer, modules, grammar, &linked_context);
+  res = MergeModules(consumer, modules, &linked_context);
   if (res != SPV_SUCCESS) return res;
 
   if (options.GetVerifyIds()) {

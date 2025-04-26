@@ -36,8 +36,7 @@ namespace spvtools {
 namespace val {
 namespace {
 
-std::string ToString(const CapabilitySet& capabilities,
-                     const AssemblyGrammar& grammar) {
+std::string ToString(const CapabilitySet& capabilities) {
   std::stringstream ss;
   for (auto capability : capabilities) {
     spvtools::OperandDesc* desc = nullptr;
@@ -205,7 +204,7 @@ spv_result_t CheckRequiredCapabilities(ValidationState_t& state,
                << "Operand " << which_operand << " of "
                << spvOpcodeString(inst->opcode())
                << " requires one of these capabilities: "
-               << ToString(enabling_capabilities, state.grammar());
+               << ToString(enabling_capabilities);
       }
     }
     return OperandVersionExtensionCheck(state, inst, which_operand,
@@ -246,8 +245,7 @@ spv_result_t CapabilityCheck(ValidationState_t& _, const Instruction* inst) {
   if (!_.HasAnyOfCapabilities(opcode_caps)) {
     return _.diag(SPV_ERROR_INVALID_CAPABILITY, inst)
            << "Opcode " << spvOpcodeString(opcode)
-           << " requires one of these capabilities: "
-           << ToString(opcode_caps, _.grammar());
+           << " requires one of these capabilities: " << ToString(opcode_caps);
   }
   for (size_t i = 0; i < inst->operands().size(); ++i) {
     const auto& operand = inst->operand(i);

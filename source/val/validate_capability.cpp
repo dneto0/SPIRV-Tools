@@ -353,7 +353,7 @@ spv_result_t CapabilityPass(ValidationState_t& _, const Instruction* inst) {
   assert(operand.offset < inst->words().size());
 
   const uint32_t capability = inst->word(operand.offset);
-  const auto capability_str = [&_, capability]() {
+  const auto capability_str = [capability]() {
     spvtools::OperandDesc* desc = nullptr;
     if (spvtools::LookupOperand(SPV_OPERAND_TYPE_CAPABILITY, capability,
                                 &desc) != SPV_SUCCESS ||

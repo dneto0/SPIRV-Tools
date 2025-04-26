@@ -35,7 +35,8 @@ TEST_P(OpcodeTableCapabilitiesTest, TableEntryMatchesExpectedCapabilities) {
   ASSERT_EQ(SPV_SUCCESS, spvtools::LookupOpcode(GetParam().opcode, &desc));
   auto caps = desc->capabilities();
   EXPECT_EQ(ElementsIn(GetParam().capabilities),
-            ElementsIn(CapabilitySet(caps.size(), caps.data())));
+            ElementsIn(CapabilitySet(static_cast<uint32_t>(caps.size()),
+                                     caps.data())));
 }
 
 INSTANTIATE_TEST_SUITE_P(
