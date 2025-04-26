@@ -741,7 +741,7 @@ spv_result_t spvTextEncodeOpcode(const spvtools::AssemblyGrammar& grammar,
     const auto operands = opcodeEntry->operands();
     const auto n = operands.size();
     expectedOperands.reserve(n);
-    for (auto i = 0; i < n; i++) {
+    for (auto i = 0u; i < n; i++) {
       auto ty = operands[n - i - 1];
       expectedOperands.push_back(ty);
     }

@@ -926,7 +926,7 @@ spv_result_t ValidateDuplicateExecutionModes(ValidationState_t& _) {
   std::set<PerEntryKey> seen_per_entry;
   std::set<PerOperandKey> seen_per_operand;
 
-  const auto lookupMode = [&_](spv::ExecutionMode mode) -> std::string {
+  const auto lookupMode = [](spv::ExecutionMode mode) -> std::string {
     spvtools::OperandDesc* desc = nullptr;
     if (spvtools::LookupOperand(SPV_OPERAND_TYPE_EXECUTION_MODE,
                                 static_cast<uint32_t>(mode),

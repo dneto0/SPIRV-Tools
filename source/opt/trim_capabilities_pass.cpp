@@ -448,8 +448,7 @@ constexpr std::array<std::pair<spv::Op, OpcodeHandler>, 14> kOpcodeHandlers{{
 // ==============  End opcode handler implementations.  =======================
 
 namespace {
-ExtensionSet getExtensionsRelatedTo(const CapabilitySet& capabilities,
-                                    const AssemblyGrammar& grammar) {
+ExtensionSet getExtensionsRelatedTo(const CapabilitySet& capabilities) {
   ExtensionSet output;
   spvtools::OperandDesc* desc = nullptr;
   for (auto capability : capabilities) {
@@ -725,7 +724,7 @@ Pass::Status TrimCapabilitiesPass::TrimUnrequiredCapabilities(
 Pass::Status TrimCapabilitiesPass::TrimUnrequiredExtensions(
     const ExtensionSet& required_extensions) const {
   const auto supported_extensions =
-      getExtensionsRelatedTo(supportedCapabilities_, context()->grammar());
+      getExtensionsRelatedTo(supportedCapabilities_);
 
   bool modified_module = false;
   for (auto extension : supported_extensions) {
