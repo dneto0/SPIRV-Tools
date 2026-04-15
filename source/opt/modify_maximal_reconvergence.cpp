@@ -37,7 +37,7 @@ bool ModifyMaximalReconvergence::AddMaximalReconvergence() {
   bool has_shader =
       context()->get_feature_mgr()->HasCapability(spv::Capability::Shader);
   for (auto extension : context()->extensions()) {
-    if (extension.GetOperand(0).AsString() == "SPV_KHR_maximal_reconvergence") {
+    if (extension.GetOperandAsString(0) == "SPV_KHR_maximal_reconvergence") {
       has_extension = true;
       break;
     }

@@ -25,7 +25,8 @@ namespace spvtools {
 using ExtensionSet = EnumSet<Extension>;
 
 // Returns the literal string operand of OpExtension instruction.
-std::string GetExtensionString(const spv_parsed_instruction_t* inst);
+std::string GetExtensionString(const spv_parsed_instruction_t* inst,
+                               spv_endianness_t endian);
 
 // Returns a text string listing |extensions| separated by whitespace.
 std::string ExtensionSetToString(const ExtensionSet& extensions);

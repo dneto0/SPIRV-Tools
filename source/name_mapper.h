@@ -108,8 +108,19 @@ class FriendlyNameMapper {
         *parsed_instruction);
   }
 
+  // Records the endianness of the module.
+  static spv_result_t ParseHeader(void* user_data, spv_endianness_t endian,
+                                  uint32_t, uint32_t, uint32_t, uint32_t,
+                                  uint32_t) {
+    reinterpret_cast<FriendlyNameMapper*>(user_data)->endian_ = endian;
+    return SPV_SUCCESS;
+  }
+
   // Returns the friendly name for an enumerant.
   std::string NameForEnumOperand(spv_operand_type_t type, uint32_t word);
+
+  // The endiannes of the binary. This affects string decoding.
+  spv_endianness_t endian_;
 
   // Maps an id to its friendly name.  This will have an entry for each Id
   // defined in the module.

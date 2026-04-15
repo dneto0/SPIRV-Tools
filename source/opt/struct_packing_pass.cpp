@@ -381,7 +381,7 @@ Pass::Status StructPackingPass::Process() {
 uint32_t StructPackingPass::findStructIdByName(const char* structName) const {
   for (Instruction& instr : context()->module()->debugs2()) {
     if (instr.opcode() == spv::Op::OpName &&
-        instr.GetOperand(1).AsString() == structName) {
+        instr.GetOperandAsString(1) == structName) {
       return instr.GetOperand(0).AsId();
     }
   }

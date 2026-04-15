@@ -46,6 +46,7 @@ spv_result_t spvBinaryParseWithOptions(
 // Decode the string literal operand with index operand_index from instruction
 // inst.
 std::string spvDecodeLiteralStringOperand(const spv_parsed_instruction_t& inst,
-                                          const uint16_t operand_index);
+                                          const uint16_t operand_index,
+                                          spv_endianness_t endian);
 
 #endif  // SOURCE_BINARY_H_

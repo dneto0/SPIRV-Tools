@@ -350,7 +350,7 @@ bool LocalAccessChainConvertPass::AllExtensionsSupported() const {
     return false;
   // If any extension not in allowlist, return false
   for (auto& ei : get_module()->extensions()) {
-    const std::string extName = ei.GetInOperand(0).AsString();
+    const std::string extName = ei.GetInOperandAsString(0);
     if (extensions_allowlist_.find(extName) == extensions_allowlist_.end())
       return false;
   }
@@ -359,7 +359,7 @@ bool LocalAccessChainConvertPass::AllExtensionsSupported() const {
   for (auto& inst : context()->module()->ext_inst_imports()) {
     assert(inst.opcode() == spv::Op::OpExtInstImport &&
            "Expecting an import of an extension's instruction set.");
-    const std::string extension_name = inst.GetInOperand(0).AsString();
+    const std::string extension_name = inst.GetInOperandAsString(0);
     if (spvtools::utils::starts_with(extension_name, "NonSemantic.") &&
         !spvtools::utils::starts_with(extension_name,
                                       "NonSemantic.Shader.DebugInfo.")) {

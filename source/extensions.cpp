@@ -23,7 +23,8 @@
 
 namespace spvtools {
 
-std::string GetExtensionString(const spv_parsed_instruction_t* inst) {
+std::string GetExtensionString(const spv_parsed_instruction_t* inst,
+                               spv_endianness_t endian) {
   if ((inst->opcode != static_cast<uint16_t>(spv::Op::OpExtension)) &&
       (inst->opcode !=
        static_cast<uint16_t>(spv::Op::OpConditionalExtensionINTEL))) {
@@ -41,7 +42,7 @@ std::string GetExtensionString(const spv_parsed_instruction_t* inst) {
   assert(inst->num_words > operand.offset);
   (void)operand; /* No unused variables in release builds. */
 
-  return spvDecodeLiteralStringOperand(*inst, op_i);
+  return spvDecodeLiteralStringOperand(*inst, op_i, endian);
 }
 
 std::string ExtensionSetToString(const ExtensionSet& extensions) {

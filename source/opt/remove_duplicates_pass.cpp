@@ -56,8 +56,7 @@ bool RemoveDuplicatesPass::RemoveDuplicateExtensions() const {
       i_name = 1;
     }
 
-    auto res =
-        extensions.insert({cond_id, inst->GetOperand(i_name).AsString()});
+    auto res = extensions.insert({cond_id, inst->GetOperandAsString(i_name)});
 
     if (res.second) {
       // Never seen before, keep it.
@@ -116,8 +115,8 @@ bool RemoveDuplicatesPass::RemoveDuplicatesExtInstImports() const {
 
   std::unordered_map<std::string, spv::Id> ext_inst_imports;
   for (auto* i = &*context()->ext_inst_import_begin(); i;) {
-    auto res = ext_inst_imports.emplace(i->GetInOperand(0u).AsString(),
-                                        i->result_id());
+    auto res =
+        ext_inst_imports.emplace(i->GetInOperandAsString(0), i->result_id());
     if (res.second) {
       // Never seen before, keep it.
       i = i->NextNode();

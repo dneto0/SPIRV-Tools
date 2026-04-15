@@ -22,7 +22,7 @@ namespace opt {
 Pass::Status StripDebugInfoPass::Process() {
   bool uses_non_semantic_info = false;
   for (auto& inst : context()->module()->extensions()) {
-    const std::string ext_name = inst.GetInOperand(0).AsString();
+    const std::string ext_name = inst.GetInOperandAsString(0);
     if (ext_name == "SPV_KHR_non_semantic_info") {
       uses_non_semantic_info = true;
     }
@@ -47,7 +47,7 @@ Pass::Status StripDebugInfoPass::Process() {
                   auto ext_inst_set =
                       def_use->GetDef(use->GetSingleWordInOperand(0u));
                   const std::string extension_name =
-                      ext_inst_set->GetInOperand(0).AsString();
+                      ext_inst_set->GetInOperandAsString(0);
                   if (spvtools::utils::starts_with(extension_name,
                                                    "NonSemantic.")) {
                     // found a non-semantic use, return false as we cannot

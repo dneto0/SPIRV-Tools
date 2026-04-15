@@ -50,9 +50,10 @@ class IrLoader {
   Module* module() const { return module_; }
 
   // Sets the fields in the module's header to the given parameters.
-  void SetModuleHeader(uint32_t magic, uint32_t version, uint32_t generator,
-                       uint32_t bound, uint32_t reserved) {
-    module_->SetHeader({magic, version, generator, bound, reserved});
+  void SetModuleHeader(spv_endianness_t endian, uint32_t magic,
+                       uint32_t version, uint32_t generator, uint32_t bound,
+                       uint32_t reserved) {
+    module_->SetHeader({endian, magic, version, generator, bound, reserved});
   }
   // Adds an instruction to the module. Returns true if no error occurs. This
   // method will properly capture and store the data provided in |inst| so that

@@ -334,7 +334,7 @@ uint32_t DescriptorScalarReplacement::CreateReplacementVariable(
   std::vector<std::unique_ptr<Instruction>> names_to_add;
   for (auto p : context()->GetNames(var->result_id())) {
     Instruction* name_inst = p.second;
-    std::string name_str = utils::MakeString(name_inst->GetOperand(1).words);
+    std::string name_str = name_inst->GetOperandAsString(1);
     if (is_array) {
       name_str += "[" + utils::ToString(idx) + "]";
     }
@@ -343,7 +343,7 @@ uint32_t DescriptorScalarReplacement::CreateReplacementVariable(
           context()->GetMemberName(pointee_type_inst->result_id(), idx);
       name_str += ".";
       if (member_name_inst)
-        name_str += utils::MakeString(member_name_inst->GetOperand(2).words);
+        name_str += member_name_inst->GetOperandAsString(2);
       else
         // In case the member does not have a name assigned to it, use the
         // member index.

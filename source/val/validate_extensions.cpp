@@ -158,7 +158,7 @@ std::string GetExtInstName(const ValidationState_t& _,
   assert(import_inst);
 
   std::ostringstream ss;
-  ss << import_inst->GetOperandAs<std::string>(1);
+  ss << import_inst->GetOperandAsString(1, _.getEndian());
   ss << " ";
   ss << desc->name().data();
 
@@ -202,7 +202,7 @@ spv_result_t ValidateExtInstFloatEncoding(ValidationState_t& _,
 uint32_t GetNSDIVersion(const ValidationState_t& _, const Instruction* inst) {
   const auto* import_inst = _.FindDef(inst->word(3));
   if (!import_inst) return 0;
-  const std::string name = import_inst->GetOperandAs<std::string>(1);
+  const std::string name = import_inst->GetOperandAsString(1, _.getEndian());
   const char kPrefix[] = "NonSemantic.Shader.DebugInfo.";
   if (name.find(kPrefix) != 0) return 0;
   return static_cast<uint32_t>(
@@ -526,7 +526,7 @@ spv_result_t ValidateClspvReflectionKernel(ValidationState_t& _,
     return _.diag(SPV_ERROR_INVALID_ID, inst) << "Name must be an OpString";
   }
 
-  const std::string name_str = name->GetOperandAs<std::string>(1);
+  const std::string name_str = name->GetOperandAsString(1, _.getEndian());
   bool found = false;
   for (auto& desc : _.entry_point_descriptions(kernel_id)) {
     if (name_str == desc.name) {
@@ -1215,7 +1215,7 @@ std::string GetDebugSourceText(ValidationState_t& _, const Instruction* inst,
   auto* debug_source_text_insn = _.FindDef(inst->word(string_operand));
   // Validated to be an OpString
   assert(debug_source_text_insn->opcode() == spv::Op::OpString);
-  return debug_source_text_insn->GetOperandAs<std::string>(1);
+  return debug_source_text_insn->GetOperandAsString(1, _.getEndian());
 }
 
 // We build up a vector that is length of the DebugSource lines and get how long
@@ -1362,7 +1362,7 @@ bool IsDebugVariableWithIntScalarType(ValidationState_t& _,
 }  // anonymous namespace
 
 spv_result_t ValidateExtension(ValidationState_t& _, const Instruction* inst) {
-  std::string extension = GetExtensionString(&(inst->c_inst()));
+  std::string extension = GetExtensionString(&(inst->c_inst()), _.getEndian());
   if (_.version() < SPV_SPIRV_VERSION_WORD(1, 3)) {
     if (extension == ExtensionToString(kSPV_KHR_vulkan_memory_model) ||
         extension ==
@@ -1394,7 +1394,7 @@ spv_result_t ValidateExtension(ValidationState_t& _, const Instruction* inst) {
 spv_result_t ValidateExtInstImport(ValidationState_t& _,
                                    const Instruction* inst) {
   const auto name_id = 1;
-  const std::string name = inst->GetOperandAs<std::string>(name_id);
+  const std::string name = inst->GetOperandAsString(name_id, _.getEndian());
   if (_.version() <= SPV_SPIRV_VERSION_WORD(1, 5) &&
       !_.HasExtension(kSPV_KHR_non_semantic_info)) {
     if (name.find("NonSemantic.") == 0) {
@@ -4428,7 +4428,7 @@ spv_result_t ValidateExtInstGraphDebugInfo(ValidationState_t& _,
 spv_result_t ValidateExtInstNonsemanticClspvReflection(
     ValidationState_t& _, const Instruction* inst) {
   auto import_inst = _.FindDef(inst->GetOperandAs<uint32_t>(2));
-  const std::string name = import_inst->GetOperandAs<std::string>(1);
+  const std::string name = import_inst->GetOperandAsString(1, _.getEndian());
   const std::string reflection = "NonSemantic.ClspvReflection.";
   char* end_ptr;
   auto version_string = name.substr(reflection.size());

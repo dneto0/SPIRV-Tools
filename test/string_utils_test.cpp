@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "gmock/gmock.h"
+#include "source/spirv_endian.h"
 #include "source/util/small_vector.h"
 #include "spirv-tools/libspirv.h"
 
@@ -197,7 +198,7 @@ TEST_P(MakeVectorMakeStringRoundTripTest, ViaStdVector) {
   // Allow for the terminating null byte that must be present.
   const auto expected_vec_len = (str.size() + 4) / 4;
   EXPECT_EQ(vec.size(), expected_vec_len);
-  const std::string back_to_string = MakeString(vec);
+  const std::string back_to_string = MakeString(vec, spvGetHostEndianness());
   EXPECT_EQ(str, back_to_string);
 }
 
@@ -207,7 +208,7 @@ TEST_P(MakeVectorMakeStringRoundTripTest, ViaSmallVector1) {
   const auto expected_vec_len = (str.size() + 4) / 4;
   const auto& vec = MakeVector<spvtools::utils::SmallVector<uint32_t, 1>>(str);
   EXPECT_EQ(vec.size(), expected_vec_len);
-  const std::string back_to_string = MakeString(vec);
+  const std::string back_to_string = MakeString(vec, spvGetHostEndianness());
   EXPECT_EQ(str, back_to_string);
 }
 
@@ -218,7 +219,7 @@ TEST_P(MakeVectorMakeStringRoundTripTest, ViaSmallVector100) {
   const auto& vec =
       MakeVector<spvtools::utils::SmallVector<uint32_t, 100>>(str);
   EXPECT_EQ(vec.size(), expected_vec_len);
-  const std::string back_to_string = MakeString(vec);
+  const std::string back_to_string = MakeString(vec, spvGetHostEndianness());
   EXPECT_EQ(str, back_to_string);
 }
 

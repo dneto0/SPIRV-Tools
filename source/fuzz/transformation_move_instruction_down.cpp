@@ -32,7 +32,7 @@ std::string GetExtensionSet(opt::IRContext* ir_context,
       op_ext_inst.GetSingleWordInOperand(0));
   assert(ext_inst_import && "Extension set is not imported");
 
-  return ext_inst_import->GetInOperand(0).AsString();
+  return ext_inst_import->GetInOperandAsString(0);
 }
 
 }  // namespace
@@ -251,7 +251,7 @@ bool TransformationMoveInstructionDown::IsSimpleInstruction(
       const auto* ext_inst_import =
           ir_context->get_def_use_mgr()->GetDef(inst.GetSingleWordInOperand(0));
 
-      if (ext_inst_import->GetInOperand(0).AsString() != kExtensionSetName) {
+      if (ext_inst_import->GetInOperandAsString(0) != kExtensionSetName) {
         return false;
       }
 

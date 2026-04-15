@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include "source/spirv_endian.h"
+
 namespace spvtools {
 namespace utils {
 
@@ -81,15 +83,17 @@ inline VectorType MakeVector(const std::string& input) {
 // Decode a string from a sequence of words between first and last, using the
 // SPIR-V encoding. Assert that a terminating 0-byte was found (unless
 // assert_found_terminating_null is passed as false).
+// Assume the source words are in the given endianness.
 template <class InputIt>
 inline std::string MakeString(InputIt first, InputIt last,
+                              spv_endianness_t source_endianness,
                               bool assert_found_terminating_null = true) {
   std::string result;
   constexpr size_t kCharsPerWord = sizeof(*first);
   static_assert(kCharsPerWord == 4, "expect 4-byte word");
 
   for (InputIt pos = first; pos != last; ++pos) {
-    uint32_t word = *pos;
+    uint32_t word = spvFixWord(*pos, source_endianness);
     for (size_t byte_index = 0; byte_index < kCharsPerWord; byte_index++) {
       uint32_t extracted_word = (word >> (8 * byte_index)) & 0xFF;
       char c = static_cast<char>(extracted_word);
@@ -107,19 +111,22 @@ inline std::string MakeString(InputIt first, InputIt last,
 }
 
 // Decode a string from a sequence of words in a vector, using the SPIR-V
-// encoding.
+// encoding.  Assume the source words are in the given endianness.
 template <class VectorType>
 inline std::string MakeString(const VectorType& words,
+                              spv_endianness_t source_endianness,
                               bool assert_found_terminating_null = true) {
-  return MakeString(words.cbegin(), words.cend(),
+  return MakeString(words.cbegin(), words.cend(), source_endianness,
                     assert_found_terminating_null);
 }
 
 // Decode a string from array words, consuming up to count words, using the
-// SPIR-V encoding.
+// SPIR-V encoding.  Assume the source words are in the given endianness.
 inline std::string MakeString(const uint32_t* words, size_t num_words,
+                              spv_endianness_t source_endianness,
                               bool assert_found_terminating_null = true) {
-  return MakeString(words, words + num_words, assert_found_terminating_null);
+  return MakeString(words, words + num_words, source_endianness,
+                    assert_found_terminating_null);
 }
 
 // Check if str starts with prefix (only included since C++20)

@@ -32,8 +32,10 @@ namespace opt {
 
 class IRContext;
 
-// A struct for containing the module header information.
+// A struct for containing the module header information,
+// and the deduced endianness.
 struct ModuleHeader {
+  spv_endianness_t endianness;
   uint32_t magic_number;
   uint32_t version;
   uint32_t generator;
@@ -57,6 +59,9 @@ class Module {
 
   // Sets the header to the given |header|.
   void SetHeader(const ModuleHeader& header) { header_ = header; }
+
+  // Gets the module endianness.
+  spv_endianness_t Endianness() const { return header_.endianness; }
 
   // Sets the Id bound.  The Id bound cannot be set to 0.
   void SetIdBound(uint32_t bound) {

@@ -62,7 +62,7 @@ void CanonicalizeIdsPass::ScanIds() {
         // Look for names.
         else if (inst->opcode() == spv::Op::OpName) {
           // store name string in map so that we can compute the hash later
-          auto const name = inst->GetOperand(1).AsString();
+          auto const name = inst->GetOperandAsString(1);
           auto const target = inst->GetSingleWordInOperand(0);
           name_ids_[name] = target;
           SetNewId(target, unmapped_);

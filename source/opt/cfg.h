@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "source/opt/basic_block.h"
+#include "source/opt/module.h"
 
 namespace spvtools {
 namespace opt {

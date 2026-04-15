@@ -43,7 +43,7 @@ std::string GetFriendlyName(opt::IRContext* context, uint32_t id) {
   } else {
     opt::Instruction* inst_name = names.begin()->second;
     if (inst_name->opcode() == spv::Op::OpName) {
-      ss << names.begin()->second->GetInOperand(0).AsString();
+      ss << names.begin()->second->GetInOperandAsString(0);
       ss << "[" << id << "]";
     } else {
       ss << id;

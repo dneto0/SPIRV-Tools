@@ -44,11 +44,12 @@ bool operator==(const Instruction& lhs, uint32_t rhs) {
   return lhs.id() == rhs;
 }
 
-template <>
-std::string Instruction::GetOperandAs<std::string>(size_t index) const {
+std::string Instruction::GetOperandAsString(size_t index,
+                                            spv_endianness_t endian) const {
   const spv_parsed_operand_t& o = operands_.at(index);
   assert(o.offset + o.num_words <= inst_.num_words);
-  return spvtools::utils::MakeString(words_.data() + o.offset, o.num_words);
+  return spvtools::utils::MakeString(words_.data() + o.offset, o.num_words,
+                                     endian);
 }
 
 }  // namespace val
