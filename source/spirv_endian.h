@@ -20,6 +20,12 @@
 // Converts a word in the specified endianness to the host native endianness.
 uint32_t spvFixWord(const uint32_t word, const spv_endianness_t endianness);
 
+// Converts a word from one endianness to the other.
+inline uint32_t spvFlipWord(const uint32_t word) {
+  return ((word >> 24u) & 0xffu) | ((word >> 8u) & 0xff00u) |
+         ((word << 8u) & 0xff0000u) | ((word << 24u) & 0xff000000u);
+}
+
 // Converts a pair of words in the specified endianness to the host native
 // endianness.
 uint64_t spvFixDoubleWord(const uint32_t low, const uint32_t high,

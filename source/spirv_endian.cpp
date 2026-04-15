@@ -34,8 +34,7 @@ static const union {
 uint32_t spvFixWord(const uint32_t word, const spv_endianness_t endian) {
   if ((SPV_ENDIANNESS_LITTLE == endian && I32_ENDIAN_HOST == I32_ENDIAN_BIG) ||
       (SPV_ENDIANNESS_BIG == endian && I32_ENDIAN_HOST == I32_ENDIAN_LITTLE)) {
-    return (word & 0x000000ff) << 24 | (word & 0x0000ff00) << 8 |
-           (word & 0x00ff0000) >> 8 | (word & 0xff000000) >> 24;
+    return spvFlipWord(word);
   }
 
   return word;

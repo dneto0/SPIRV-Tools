@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include "source/spirv_endian.h"
 
 namespace spvtools {
 namespace utils {
@@ -81,7 +82,7 @@ inline VectorType MakeVector(const std::string& input) {
 // Decode a string from a sequence of words between first and last, using the
 // SPIR-V encoding. Assert that a terminating 0-byte was found (unless
 // assert_found_terminating_null is passed as false).
-template <class InputIt>
+template <class InputIt, bool FlipEndian = false>
 inline std::string MakeString(InputIt first, InputIt last,
                               bool assert_found_terminating_null = true) {
   std::string result;
@@ -90,6 +91,9 @@ inline std::string MakeString(InputIt first, InputIt last,
 
   for (InputIt pos = first; pos != last; ++pos) {
     uint32_t word = *pos;
+    if (FlipEndian) {
+      word = spvFlipWord(word);
+    }
     for (size_t byte_index = 0; byte_index < kCharsPerWord; byte_index++) {
       uint32_t extracted_word = (word >> (8 * byte_index)) & 0xFF;
       char c = static_cast<char>(extracted_word);
