@@ -65,12 +65,13 @@ spv_result_t spvBinaryHeaderGet(const spv_const_binary binary,
 }
 
 std::string spvDecodeLiteralStringOperand(const spv_parsed_instruction_t& inst,
-                                          const uint16_t operand_index) {
+                                          const uint16_t operand_index,
+                                          spv_endianness_t source_endianness) {
   assert(operand_index < inst.num_operands);
   const spv_parsed_operand_t& operand = inst.operands[operand_index];
 
   return spvtools::utils::MakeString(inst.words + operand.offset,
-                                     operand.num_words);
+                                     operand.num_words, source_endianness);
 }
 
 namespace {
@@ -663,8 +664,8 @@ spv_result_t Parser::parseOperand(size_t inst_offset,
     case SPV_OPERAND_TYPE_LITERAL_STRING:
     case SPV_OPERAND_TYPE_OPTIONAL_LITERAL_STRING: {
       const size_t max_words = _.num_words - _.word_index;
-      std::string string =
-          spvtools::utils::MakeString(_.words + _.word_index, max_words, false);
+      std::string string = spvtools::utils::MakeString(
+          _.words + _.word_index, max_words, _.endian, false);
 
       if (string.length() == max_words * 4)
         return exhaustedInputDiagnostic(inst_offset, opcode, type);

@@ -139,6 +139,7 @@ class IRContext {
   ~IRContext() { spvContextDestroy(syntax_context_); }
 
   Module* module() const { return module_.get(); }
+  spv_endianness_t endian() const { return module_.get()->Endianness(); }
 
   // Returns a vector of pointers to constant-creation instructions in this
   // context.
@@ -1332,12 +1333,13 @@ void IRContext::CloneNames(const uint32_t old_id, const uint32_t new_id,
   std::vector<std::unique_ptr<Instruction>> names_to_add;
   auto names = GetNames(old_id);
   for (auto n : names) {
-    Instruction* old_name_inst = n.second;
+    opt::Instruction* old_name_inst = n.second;
     if (old_name_inst->opcode() == spv::Op::OpMemberName) {
       auto midx = old_name_inst->GetSingleWordInOperand(1);
       if (midx >= max_member_index) continue;
     }
-    std::unique_ptr<Instruction> new_name_inst(old_name_inst->Clone(this));
+    opt::Instruction* cloned = old_name_inst->Clone(this);
+    std::unique_ptr<Instruction> new_name_inst(cloned);
     new_name_inst->SetInOperand(0, {new_id});
     names_to_add.push_back(std::move(new_name_inst));
   }

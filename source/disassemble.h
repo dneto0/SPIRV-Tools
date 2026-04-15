@@ -44,8 +44,8 @@ namespace disassemble {
 // binary for an instruction to its assembly representation.
 class InstructionDisassembler {
  public:
-  InstructionDisassembler(std::ostream& stream, uint32_t options,
-                          NameMapper name_mapper);
+  InstructionDisassembler(spv_endianness_t endian, std::ostream& stream,
+                          uint32_t options, NameMapper name_mapper);
 
   // Emits the assembly header for the module.
   void EmitHeaderSpirv();
@@ -78,6 +78,9 @@ class InstructionDisassembler {
   void SetRed();
   void SetGreen();
 
+  // Sets the endianness. This is only known once the header is parsed.
+  void SetEndian(spv_endianness_t endian) { endian_ = endian; }
+
  private:
   void ResetColor(std::ostream& stream) const;
   void SetGrey(std::ostream& stream) const;
@@ -103,6 +106,7 @@ class InstructionDisassembler {
   // |id_comments_|.
   void GenerateCommentForDecoratedId(const spv_parsed_instruction_t& inst);
 
+  spv_endianness_t endian_;
   std::ostream& stream_;
   const bool print_;  // Should we also print to the standard output stream?
   const bool color_;  // Should we print in colour?

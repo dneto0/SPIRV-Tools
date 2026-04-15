@@ -123,7 +123,9 @@ class Disassembler {
             spvIsInBitfield(SPV_BINARY_TO_TEXT_OPTION_REORDER_BLOCKS, options)),
         text_(),
         out_(print_ ? out_stream() : out_stream(text_)),
-        instruction_disassembler_(out_.get(), options, name_mapper),
+        // The endianness will be updated once the header is parsed.
+        instruction_disassembler_(SPV_ENDIANNESS_BIG, out_.get(), options,
+                                  name_mapper),
         header_(!spvIsInBitfield(SPV_BINARY_TO_TEXT_OPTION_NO_HEADER, options)),
         byte_offset_(0) {}
 
@@ -151,6 +153,7 @@ class Disassembler {
   spv_endianness_t endian_;  // The detected endianness of the binary.
   std::stringstream text_;   // Captures the text, if not printing.
   out_stream out_;  // The Output stream.  Either to text_ or standard output.
+
   disassemble::InstructionDisassembler instruction_disassembler_;
   const bool header_;   // Should we output header as the leading comment?
   size_t byte_offset_;  // The number of bytes processed so far.
@@ -166,6 +169,7 @@ spv_result_t Disassembler::HandleHeader(spv_endianness_t endian,
                                         uint32_t version, uint32_t generator,
                                         uint32_t id_bound, uint32_t schema) {
   endian_ = endian;
+  instruction_disassembler_.SetEndian(endian);
 
   if (header_) {
     instruction_disassembler_.EmitHeaderSpirv();
@@ -623,10 +627,12 @@ constexpr uint32_t kCommentColumn = 50;
 }  // namespace
 
 namespace disassemble {
-InstructionDisassembler::InstructionDisassembler(std::ostream& stream,
+InstructionDisassembler::InstructionDisassembler(spv_endianness_t endian,
+                                                 std::ostream& stream,
                                                  uint32_t options,
                                                  NameMapper name_mapper)
-    : stream_(stream),
+    : endian_(endian),
+      stream_(stream),
       print_(spvIsInBitfield(SPV_BINARY_TO_TEXT_OPTION_PRINT, options)),
       color_(spvIsInBitfield(SPV_BINARY_TO_TEXT_OPTION_COLOR, options)),
       indent_(spvIsInBitfield(SPV_BINARY_TO_TEXT_OPTION_INDENT, options)
@@ -941,7 +947,8 @@ void InstructionDisassembler::EmitOperand(std::ostream& stream,
       stream << "\"";
       SetGreen(stream);
 
-      std::string str = spvDecodeLiteralStringOperand(inst, operand_index);
+      std::string str =
+          spvDecodeLiteralStringOperand(inst, operand_index, endian_);
       for (char const& c : str) {
         if (c == '"' || c == '\\') stream << '\\';
         stream << c;

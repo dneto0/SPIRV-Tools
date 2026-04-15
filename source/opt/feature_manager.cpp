@@ -40,7 +40,7 @@ void FeatureManager::AddExtension(Instruction* ext) {
 
   const uint32_t name_i =
       ext->opcode() == spv::Op::OpConditionalExtensionINTEL ? 1u : 0u;
-  const std::string name = ext->GetInOperand(name_i).AsString();
+  const std::string name = ext->GetInOperandAsString(name_i);
   Extension extension;
   if (GetExtensionFromString(name.c_str(), &extension)) {
     extensions_.insert(extension);
@@ -88,7 +88,7 @@ void FeatureManager::AddExtInstImportIds(Module* module) {
       module->GetExtInstImportId("OpenCL.DebugInfo.100");
   // Match any version of NonSemantic.Shader.DebugInfo.
   for (auto& ei : module->ext_inst_imports()) {
-    const std::string name = ei.GetInOperand(0).AsString();
+    const std::string name = ei.GetInOperandAsString(0);
     if (name.compare(0, 29, "NonSemantic.Shader.DebugInfo.") == 0) {
       extinst_importid_ShaderDebugInfo_ = ei.result_id();
       break;

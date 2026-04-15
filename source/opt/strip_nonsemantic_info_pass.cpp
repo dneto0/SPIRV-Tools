@@ -66,7 +66,7 @@ Pass::Status StripNonSemanticInfoPass::Process() {
   }
 
   for (auto& inst : context()->module()->extensions()) {
-    const std::string ext_name = inst.GetInOperand(0).AsString();
+    const std::string ext_name = inst.GetInOperandAsString(0);
     if (ext_name == "SPV_GOOGLE_hlsl_functionality1") {
       to_remove.push_back(&inst);
     } else if (ext_name == "SPV_GOOGLE_user_type") {
@@ -84,7 +84,7 @@ Pass::Status StripNonSemanticInfoPass::Process() {
   for (auto& inst : context()->module()->ext_inst_imports()) {
     assert(inst.opcode() == spv::Op::OpExtInstImport &&
            "Expecting an import of an extension's instruction set.");
-    const std::string extension_name = inst.GetInOperand(0).AsString();
+    const std::string extension_name = inst.GetInOperandAsString(0);
     if (spvtools::utils::starts_with(extension_name, "NonSemantic.")) {
       non_semantic_sets.insert(inst.result_id());
       to_remove.push_back(&inst);

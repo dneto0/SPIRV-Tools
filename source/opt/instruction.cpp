@@ -1081,7 +1081,7 @@ bool Instruction::IsNonSemanticInstruction() const {
 
   auto import_inst =
       context()->get_def_use_mgr()->GetDef(GetSingleWordInOperand(0));
-  std::string import_name = import_inst->GetInOperand(0).AsString();
+  std::string import_name = import_inst->GetInOperandAsString(0);
   return import_name.find("NonSemantic.") == 0;
 }
 
@@ -1108,6 +1108,14 @@ void DebugScope::ToBinary(uint32_t type_id, uint32_t result_id,
     binary->push_back(GetLexicalScope());
     if (GetInlinedAt() != kNoInlinedAt) binary->push_back(GetInlinedAt());
   }
+}
+
+std::string Instruction::GetOperandAsString(uint32_t index) const {
+  return GetOperand(index).AsString(context_->endian());
+}
+
+std::string Instruction::GetInOperandAsString(uint32_t index) const {
+  return GetInOperand(index).AsString(context_->endian());
 }
 
 }  // namespace opt

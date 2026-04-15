@@ -16,26 +16,23 @@
 
 #include <cstring>
 
-enum {
-  I32_ENDIAN_LITTLE = 0x03020100ul,
-  I32_ENDIAN_BIG = 0x00010203ul,
-};
+constexpr uint32_t I32_ENDIAN_LITTLE = 0x03020100ul;
+constexpr uint32_t I32_ENDIAN_BIG = 0x00010203ul;
 
-// This constant value allows the detection of the host machine's endianness.
-// Accessing it through the "value" member is valid due to C++11 section 3.10
-// paragraph 10.
-static const union {
+// This constant value allows the detection of the host
+// machine's endianness. Accessing it through the "value"
+// member is valid due to C++11 section 3.10 paragraph 10.
+static union {
   unsigned char bytes[4];
   uint32_t value;
 } o32_host_order = {{0, 1, 2, 3}};
 
-#define I32_ENDIAN_HOST (o32_host_order.value)
+static const uint32_t I32_ENDIAN_HOST = o32_host_order.value;
 
 uint32_t spvFixWord(const uint32_t word, const spv_endianness_t endian) {
   if ((SPV_ENDIANNESS_LITTLE == endian && I32_ENDIAN_HOST == I32_ENDIAN_BIG) ||
       (SPV_ENDIANNESS_BIG == endian && I32_ENDIAN_HOST == I32_ENDIAN_LITTLE)) {
-    return (word & 0x000000ff) << 24 | (word & 0x0000ff00) << 8 |
-           (word & 0x00ff0000) >> 8 | (word & 0xff000000) >> 24;
+    return spvFlipWordEndianness(word);
   }
 
   return word;
@@ -69,9 +66,11 @@ spv_result_t spvBinaryEndianness(spv_const_binary binary,
   return SPV_ERROR_INVALID_BINARY;
 }
 
+spv_endianness_t spvGetHostEndianness() {
+  return (I32_ENDIAN_LITTLE == I32_ENDIAN_HOST) ? SPV_ENDIANNESS_LITTLE
+                                                : SPV_ENDIANNESS_BIG;
+}
+
 bool spvIsHostEndian(spv_endianness_t endian) {
-  return ((SPV_ENDIANNESS_LITTLE == endian) &&
-          (I32_ENDIAN_LITTLE == I32_ENDIAN_HOST)) ||
-         ((SPV_ENDIANNESS_BIG == endian) &&
-          (I32_ENDIAN_BIG == I32_ENDIAN_HOST));
+  return spvGetHostEndianness() == endian;
 }

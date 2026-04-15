@@ -278,7 +278,7 @@ bool Module::HasExplicitCapability(uint32_t cap) {
 
 uint32_t Module::GetExtInstImportId(const char* extstr) {
   for (auto& ei : ext_inst_imports_)
-    if (!ei.GetInOperand(0).AsString().compare(extstr)) return ei.result_id();
+    if (!ei.GetInOperandAsString(0).compare(extstr)) return ei.result_id();
   return 0;
 }
 

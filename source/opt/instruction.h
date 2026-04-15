@@ -43,8 +43,8 @@ namespace spvtools {
 namespace opt {
 
 class Function;
-class IRContext;
 class Module;
+class IRContext;
 class InstructionList;
 
 // Relaxed logical addressing:
@@ -99,9 +99,9 @@ struct Operand {
   }
 
   // Returns a string operand as a std::string.
-  std::string AsString() const {
+  std::string AsString(spv_endianness_t endian) const {
     assert(type == SPV_OPERAND_TYPE_LITERAL_STRING);
-    return spvtools::utils::MakeString(words);
+    return spvtools::utils::MakeString(words, endian);
   }
 
   // Returns a literal integer operand as a uint64_t
@@ -197,7 +197,7 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
         dbg_scope_(kNoDebugScope, kNoInlinedAt) {}
 
   // Creates a default OpNop instruction.
-  Instruction(IRContext*);
+  explicit Instruction(IRContext*);
   // Creates an instruction with the given opcode |op| and no additional logical
   // operands.
   Instruction(IRContext*, spv::Op);
@@ -366,6 +366,8 @@ class Instruction : public utils::IntrusiveNodeBase<Instruction> {
   void RemoveInOperand(uint32_t index) {
     operands_.erase(operands_.begin() + index + TypeResultIdCount());
   }
+  std::string GetOperandAsString(uint32_t index) const;
+  std::string GetInOperandAsString(uint32_t index) const;
 
   // Returns true if this instruction is OpNop.
   inline bool IsNop() const;
@@ -919,6 +921,7 @@ bool Instruction::IsAtomicOp() const { return spvOpcodeIsAtomicOp(opcode()); }
 bool Instruction::IsConstant() const {
   return IsConstantInst(opcode()) && !IsSpecConstantInst(opcode());
 }
+
 }  // namespace opt
 }  // namespace spvtools
 

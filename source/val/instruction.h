@@ -105,6 +105,11 @@ class Instruction {
     assert(o.offset + o.num_words <= inst_.num_words);
     return *reinterpret_cast<const T*>(&words_[o.offset]);
   }
+  template <>
+  std::string GetOperandAs<std::string>(size_t index) const = delete;
+  // To get the string, you have to specify the endianness of the binary.
+  std::string GetOperandAsString(size_t index,
+                                 spv_endianness_t endianness) const;
 
   size_t LineNum() const { return line_num_; }
   void SetLineNum(size_t pos) { line_num_ = pos; }
@@ -132,9 +137,6 @@ bool operator<(const Instruction& lhs, const Instruction& rhs);
 bool operator<(const Instruction& lhs, uint32_t rhs);
 bool operator==(const Instruction& lhs, const Instruction& rhs);
 bool operator==(const Instruction& lhs, uint32_t rhs);
-
-template <>
-std::string Instruction::GetOperandAs<std::string>(size_t index) const;
 
 }  // namespace val
 }  // namespace spvtools

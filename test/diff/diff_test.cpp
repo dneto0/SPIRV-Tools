@@ -194,6 +194,7 @@ TEST(DiffHeaderTest, Diff) {
 
   // Differentiate them in the header.
   const spvtools::opt::ModuleHeader src_header = {
+      SPV_ENDIANNESS_LITTLE,
       spv::MagicNumber,
       SPV_SPIRV_VERSION_WORD(1, 3),
       SPV_GENERATOR_WORD(SPV_GENERATOR_KHRONOS_ASSEMBLER, 3),
@@ -201,6 +202,7 @@ TEST(DiffHeaderTest, Diff) {
       src->module()->schema(),
   };
   const spvtools::opt::ModuleHeader dst_header = {
+      SPV_ENDIANNESS_LITTLE,
       spv::MagicNumber,
       SPV_SPIRV_VERSION_WORD(1, 2),
       SPV_GENERATOR_WORD(SPV_GENERATOR_KHRONOS_GLSLANG, 10),

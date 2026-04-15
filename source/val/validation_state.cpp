@@ -145,11 +145,12 @@ spv_result_t CountInstructions(void* user_data,
   return SPV_SUCCESS;
 }
 
-spv_result_t setHeader(void* user_data, spv_endianness_t, uint32_t,
+spv_result_t setHeader(void* user_data, spv_endianness_t endian, uint32_t,
                        uint32_t version, uint32_t generator, uint32_t id_bound,
                        uint32_t) {
   ValidationState_t& vstate =
       *(reinterpret_cast<ValidationState_t*>(user_data));
+  vstate.setEndian(endian);
   vstate.setIdBound(id_bound);
   vstate.setGenerator(generator);
   vstate.setVersion(version);
@@ -580,13 +581,13 @@ void ValidationState_t::RegisterDebugInstruction(const Instruction* inst) {
   switch (inst->opcode()) {
     case spv::Op::OpName: {
       const auto target = inst->GetOperandAs<uint32_t>(0);
-      const std::string str = inst->GetOperandAs<std::string>(1);
+      const std::string str = inst->GetOperandAsString(1, endian_);
       AssignNameToId(target, str);
       break;
     }
     case spv::Op::OpMemberName: {
       const auto target = inst->GetOperandAs<uint32_t>(0);
-      const std::string str = inst->GetOperandAs<std::string>(2);
+      const std::string str = inst->GetOperandAsString(2, endian_);
       AssignNameToId(target, str);
       break;
     }

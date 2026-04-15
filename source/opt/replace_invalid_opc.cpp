@@ -115,7 +115,7 @@ bool ReplaceInvalidOpcodePass::RewriteFunction(Function* function,
             }
             Instruction* file_name =
                 context()->get_def_use_mgr()->GetDef(file_name_id);
-            const std::string source = file_name->GetInOperand(0).AsString();
+            const std::string source = file_name->GetInOperandAsString(0);
 
             // Get the line number and column number.
             uint32_t line_number =

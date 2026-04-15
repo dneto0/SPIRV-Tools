@@ -87,7 +87,7 @@ void UpgradeMemoryModel::UpgradeInstructions() {
         if (ext_inst == GLSLstd450Modf || ext_inst == GLSLstd450Frexp) {
           auto import =
               get_def_use_mgr()->GetDef(inst->GetSingleWordInOperand(0u));
-          if (import->GetInOperand(0u).AsString() == "GLSL.std.450") {
+          if (import->GetInOperandAsString(0) == "GLSL.std.450") {
             UpgradeExtInst(inst);
           }
         }

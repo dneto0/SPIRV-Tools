@@ -330,8 +330,8 @@ spv_result_t MergeModules(const MessageConsumer& consumer,
       const uint32_t model = inst.GetSingleWordInOperand(0);
       const std::string name =
           inst.opcode() == spv::Op::OpConditionalEntryPointINTEL
-              ? inst.GetOperand(3).AsString()
-              : inst.GetOperand(2).AsString();
+              ? inst.GetOperandAsString(3)
+              : inst.GetOperandAsString(2);
       const auto i = std::find_if(
           entry_points.begin(), entry_points.end(),
           [model, name](const std::pair<uint32_t, std::string>& v) {
@@ -452,7 +452,7 @@ spv_result_t GetImportExportPairs(const MessageConsumer& consumer,
     const uint32_t type = decoration.GetSingleWordInOperand(3u);
 
     LinkageSymbolInfo symbol_info;
-    symbol_info.name = decoration.GetInOperand(2u).AsString();
+    symbol_info.name = decoration.GetInOperandAsString(2u);
     symbol_info.id = id;
     symbol_info.type_id = 0u;
 

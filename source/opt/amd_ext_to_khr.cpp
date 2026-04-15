@@ -1081,7 +1081,7 @@ Pass::Status AmdExtensionToKhrPass::Process() {
   std::vector<Instruction*> to_be_killed;
   for (Instruction& inst : context()->module()->extensions()) {
     if (inst.opcode() == spv::Op::OpExtension) {
-      if (ext_to_remove.count(inst.GetInOperand(0).AsString()) != 0) {
+      if (ext_to_remove.count(inst.GetInOperandAsString(0)) != 0) {
         to_be_killed.push_back(&inst);
       }
     }
@@ -1089,7 +1089,7 @@ Pass::Status AmdExtensionToKhrPass::Process() {
 
   for (Instruction& inst : context()->ext_inst_imports()) {
     if (inst.opcode() == spv::Op::OpExtInstImport) {
-      if (ext_to_remove.count(inst.GetInOperand(0).AsString()) != 0) {
+      if (ext_to_remove.count(inst.GetInOperandAsString(0)) != 0) {
         to_be_killed.push_back(&inst);
       }
     }

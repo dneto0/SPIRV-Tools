@@ -431,7 +431,7 @@ spv_result_t SplitCombinedImageSamplerPass::RemapUses(
       }
       case spv::Op::OpName: {
         // Synthesize new names from the old.
-        const auto name = use.user->GetOperand(1).AsString();
+        const auto name = use.user->GetOperandAsString(1);
         AddOpName(use.image_part->result_id(), name + "_image");
         AddOpName(use.sampler_part->result_id(), name + "_sampler");
 

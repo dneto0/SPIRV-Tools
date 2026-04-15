@@ -46,7 +46,8 @@ namespace {
 // Parses OpExtension instruction and registers extension.
 void RegisterExtension(ValidationState_t& _,
                        const spv_parsed_instruction_t* inst) {
-  const std::string extension_str = spvtools::GetExtensionString(inst);
+  const std::string extension_str =
+      spvtools::GetExtensionString(inst, _.getEndian());
   Extension extension;
   if (!GetExtensionFromString(extension_str.c_str(), &extension)) {
     // The error will be logged in the ProcessInstruction pass.
@@ -242,7 +243,7 @@ spv_result_t ValidateBinaryUsingContextAndValidationState(
         const auto entry_point = inst->GetOperandAs<uint32_t>(i_point);
         const auto execution_model =
             inst->GetOperandAs<spv::ExecutionModel>(i_model);
-        const std::string desc_name = inst->GetOperandAs<std::string>(i_name);
+        const std::string desc_name = inst->GetOperandAsString(i_name, endian);
 
         ValidationState_t::EntryPointDescription desc;
         desc.name = desc_name;
@@ -262,7 +263,7 @@ spv_result_t ValidateBinaryUsingContextAndValidationState(
               const auto check_execution_model =
                   check_inst->GetOperandAs<spv::ExecutionModel>(i_model);
               const std::string check_name =
-                  check_inst->GetOperandAs<std::string>(i_name);
+                  check_inst->GetOperandAsString(i_name, vstate->getEndian());
 
               if (desc_name == check_name &&
                   execution_model == check_execution_model) {

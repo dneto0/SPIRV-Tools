@@ -606,7 +606,7 @@ uint32_t GraphicsRobustAccessPass::GetGlslInsts() {
     const char glsl[] = "GLSL.std.450";
     // Use an existing import if we can.
     for (auto& inst : context()->module()->ext_inst_imports()) {
-      if (inst.GetInOperand(0).AsString() == glsl) {
+      if (inst.GetInOperandAsString(0) == glsl) {
         module_status_.glsl_insts_id = inst.result_id();
       }
     }

@@ -1064,8 +1064,8 @@ spv_result_t CheckDecorationsOfEntryPoints(ValidationState_t& vstate) {
       // targeted by an OpEntryPoint instruction
       for (auto& decoration : vstate.id_decorations(entry_point)) {
         if (spv::Decoration::LinkageAttributes == decoration.dec_type()) {
-          const std::string linkage_name =
-              spvtools::utils::MakeString(decoration.params());
+          const std::string linkage_name = spvtools::utils::MakeString(
+              decoration.params(), vstate.getEndian());
           return vstate.diag(SPV_ERROR_INVALID_BINARY,
                              vstate.FindDef(entry_point))
                  << "The LinkageAttributes Decoration (Linkage name: "

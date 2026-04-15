@@ -17,6 +17,11 @@
 
 #include "spirv-tools/libspirv.h"
 
+inline uint32_t spvFlipWordEndianness(uint32_t word) {
+  return (word & 0x000000ff) << 24 | (word & 0x0000ff00) << 8 |
+         (word & 0x00ff0000) >> 8 | (word & 0xff000000) >> 24;
+}
+
 // Converts a word in the specified endianness to the host native endianness.
 uint32_t spvFixWord(const uint32_t word, const spv_endianness_t endianness);
 
@@ -33,5 +38,8 @@ spv_result_t spvBinaryEndianness(const spv_const_binary binary,
 
 // Returns true if the given endianness matches the host's native endianness.
 bool spvIsHostEndian(spv_endianness_t endian);
+
+// Returns the endianness of the host.
+spv_endianness_t spvGetHostEndianness();
 
 #endif  // SOURCE_SPIRV_ENDIAN_H_

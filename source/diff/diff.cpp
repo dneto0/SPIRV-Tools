@@ -253,7 +253,8 @@ class Differ {
         out_(out),
         src_id_to_(src_),
         dst_id_to_(dst_),
-        id_map_(src_->IdBound(), dst_->IdBound()) {
+        id_map_(src_->IdBound(), dst_->IdBound()),
+        endian_(src->endian()) {
     // Cache function bodies in canonicalization order.
     GetFunctionBodies(src_context_, &src_funcs_, &src_func_insts_);
     GetFunctionBodies(dst_context_, &dst_funcs_, &dst_func_insts_);
@@ -569,6 +570,7 @@ class Differ {
   const opt::Module* dst_;
   Options options_;
   std::ostream& out_;
+  const spv_endianness_t endian_;
 
   // Helpers to look up instructions based on id.
   IdInstructions src_id_to_;
@@ -843,8 +845,9 @@ int Differ::ComparePreambleInstructions(const opt::Instruction* a,
         assert(false && "Unreachable");
         break;
       case SPV_OPERAND_TYPE_LITERAL_STRING: {
-        int str_compare =
-            strcmp(a_operand.AsString().c_str(), b_operand.AsString().c_str());
+        std::string a_str = a->GetOperandAsString(operand_index);
+        std::string b_str = b->GetOperandAsString(operand_index);
+        int str_compare = strcmp(a_str.c_str(), b_str.c_str());
         if (str_compare != 0) {
           return str_compare;
         }
@@ -1044,7 +1047,7 @@ bool Differ::DoesOperandMatch(const opt::Operand& src_operand,
       // Match ids only if they are already matched in the id map.
       return DoIdsMatch(src_operand.AsId(), dst_operand.AsId());
     case SPV_OPERAND_TYPE_LITERAL_STRING:
-      return src_operand.AsString() == dst_operand.AsString();
+      return src_operand.AsString(endian_) == dst_operand.AsString(endian_);
     default:
       // Otherwise expect them to match exactly.
       assert(src_operand.type != SPV_OPERAND_TYPE_LITERAL_STRING);
@@ -1909,7 +1912,7 @@ std::string Differ::GetName(const IdInstructions& id_to, uint32_t id,
   for (const opt::Instruction* inst : id_to.name_map_[id]) {
     if (inst->opcode() == spv::Op::OpName) {
       *has_name = true;
-      return inst->GetOperand(1).AsString();
+      return inst->GetOperandAsString(1);
     }
   }
 
@@ -2064,7 +2067,7 @@ spv::StorageClass Differ::GetPerVertexStorageClass(const opt::Module* module,
 spv_ext_inst_type_t Differ::GetExtInstType(const IdInstructions& id_to,
                                            uint32_t set_id) {
   const opt::Instruction* set_inst = GetInst(id_to, set_id);
-  return spvExtInstImportTypeGet(set_inst->GetInOperand(0).AsString().c_str());
+  return spvExtInstImportTypeGet(set_inst->GetInOperandAsString(0).c_str());
 }
 
 spv_number_kind_t Differ::GetNumberKind(const IdInstructions& id_to,
@@ -2155,10 +2158,10 @@ void Differ::MatchExtInstImportIds() {
   MatchIds(potential_id_map, [](const opt::Instruction* src_inst,
                                 const opt::Instruction* dst_inst) {
     // Match OpExtInstImport by exact name, which is operand 1
-    const opt::Operand& src_name = src_inst->GetOperand(1);
-    const opt::Operand& dst_name = dst_inst->GetOperand(1);
+    const auto src_name = src_inst->GetOperandAsString(1);
+    const auto dst_name = dst_inst->GetOperandAsString(1);
 
-    return src_name.AsString() == dst_name.AsString();
+    return src_name == dst_name;
   });
 }
 void Differ::MatchMemoryModel() {
@@ -2210,10 +2213,10 @@ void Differ::MatchEntryPointIds() {
       for (const opt::Instruction* dst_inst : dst_insts) {
         if (id_map_.IsDstMapped(dst_inst)) continue;
 
-        const opt::Operand& src_name = src_inst->GetOperand(2);
-        const opt::Operand& dst_name = dst_inst->GetOperand(2);
+        const auto src_name = src_inst->GetOperandAsString(2);
+        const auto dst_name = dst_inst->GetOperandAsString(2);
 
-        if (src_name.AsString() == dst_name.AsString()) {
+        if (src_name == dst_name) {
           uint32_t src_id = src_inst->GetSingleWordOperand(1);
           uint32_t dst_id = dst_inst->GetSingleWordOperand(1);
           id_map_.MapIds(src_id, dst_id);
@@ -2810,7 +2813,7 @@ spv_result_t Differ::Output() {
   }
 
   NameMapper name_mapper = GetTrivialNameMapper();
-  disassemble::InstructionDisassembler dis(out_, disassembly_options,
+  disassemble::InstructionDisassembler dis(endian_, out_, disassembly_options,
                                            name_mapper);
 
   if (!options_.no_header) {

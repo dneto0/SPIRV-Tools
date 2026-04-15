@@ -449,7 +449,8 @@ spv_result_t LimitCheckNumVars(ValidationState_t& _, const uint32_t var_id,
 // Parses OpExtension instruction and logs warnings if unsuccessful.
 spv_result_t CheckIfKnownExtension(ValidationState_t& _,
                                    const Instruction* inst) {
-  const std::string extension_str = GetExtensionString(&(inst->c_inst()));
+  const std::string extension_str =
+      GetExtensionString(&(inst->c_inst()), _.getEndian());
   Extension extension;
   if (!GetExtensionFromString(extension_str.c_str(), &extension)) {
     return _.diag(SPV_WARNING, inst)

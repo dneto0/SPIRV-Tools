@@ -43,7 +43,7 @@ FriendlyNameMapper::FriendlyNameMapper(const spv_const_context context,
     : grammar_(AssemblyGrammar(context)) {
   spv_diagnostic diag = nullptr;
   // We don't care if the parse fails.
-  spvBinaryParseWithOptions(context, this, code, wordCount, nullptr,
+  spvBinaryParseWithOptions(context, this, code, wordCount, ParseHeader,
                             ParseInstructionForwarder, &diag, options);
   spvDiagnosticDestroy(diag);
 }
@@ -166,7 +166,7 @@ spv_result_t FriendlyNameMapper::ParseInstruction(
   const auto result_id = inst.result_id;
   switch (spv::Op(inst.opcode)) {
     case spv::Op::OpName:
-      SaveName(inst.words[1], spvDecodeLiteralStringOperand(inst, 1));
+      SaveName(inst.words[1], spvDecodeLiteralStringOperand(inst, 1, endian_));
       break;
     case spv::Op::OpDecorate:
       // Decorations come after OpName.  So OpName will take precedence over
@@ -291,8 +291,9 @@ spv_result_t FriendlyNameMapper::ParseInstruction(
       SaveName(result_id, "Queue");
       break;
     case spv::Op::OpTypeOpaque:
-      SaveName(result_id, std::string("Opaque_") +
-                              Sanitize(spvDecodeLiteralStringOperand(inst, 1)));
+      SaveName(result_id,
+               std::string("Opaque_") +
+                   Sanitize(spvDecodeLiteralStringOperand(inst, 1, endian_)));
       break;
     case spv::Op::OpTypePipeStorage:
       SaveName(result_id, "PipeStorage");

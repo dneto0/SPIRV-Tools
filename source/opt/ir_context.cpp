@@ -305,11 +305,11 @@ bool IRContext::RemoveCapability(spv::Capability capability) {
 
 bool IRContext::RemoveExtension(Extension extension) {
   const std::string_view extensionName = ExtensionToString(extension);
-  const bool removed = KillInstructionIf(
-      module()->extension_begin(), module()->extension_end(),
-      [&extensionName](Instruction* inst) {
-        return inst->GetOperand(0).AsString() == extensionName;
-      });
+  const bool removed =
+      KillInstructionIf(module()->extension_begin(), module()->extension_end(),
+                        [&extensionName](Instruction* inst) {
+                          return inst->GetOperandAsString(0) == extensionName;
+                        });
 
   if (removed && feature_mgr_ != nullptr) {
     feature_mgr_->RemoveExtension(extension);
@@ -538,7 +538,7 @@ void IRContext::KillRelatedDebugScopes(Instruction* inst) {
   // Extension has been fully unloaded, remove debug scope from every
   // instruction.
   if (inst->opcode() == spv::Op::OpExtInstImport) {
-    const std::string extension_name = inst->GetInOperand(0).AsString();
+    const std::string extension_name = inst->GetInOperandAsString(0);
     if (extension_name.compare(0, 29, "NonSemantic.Shader.DebugInfo.") == 0 ||
         extension_name == "OpenCL.DebugInfo.100") {
       module()->ForEachInst([](Instruction* child) {
@@ -726,7 +726,7 @@ void IRContext::AddCombinatorsForCapability(uint32_t capability) {
 void IRContext::AddCombinatorsForExtension(Instruction* extension) {
   assert(extension->opcode() == spv::Op::OpExtInstImport &&
          "Expecting an import of an extension's instruction set.");
-  const std::string extension_name = extension->GetInOperand(0).AsString();
+  const std::string extension_name = extension->GetInOperandAsString(0);
   if (extension_name == "GLSL.std.450") {
     combinator_ops_[extension->result_id()] = {
         (uint32_t)GLSLstd450Round,
@@ -1095,7 +1095,7 @@ void IRContext::EmitErrorMessage(std::string message, Instruction* inst) {
   if (line_inst != nullptr) {
     Instruction* file_name =
         get_def_use_mgr()->GetDef(line_inst->GetSingleWordInOperand(0));
-    source = file_name->GetInOperand(0).AsString();
+    source = file_name->GetInOperandAsString(0);
 
     // Get the line number and column number.
     line_number = line_inst->GetSingleWordInOperand(1);

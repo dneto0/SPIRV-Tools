@@ -996,7 +996,7 @@ Type* TypeManager::RecordIfTypeDefinition(const Instruction& inst) {
       }
     } break;
     case spv::Op::OpTypeOpaque: {
-      type = new Opaque(inst.GetInOperand(0).AsString());
+      type = new Opaque(inst.GetInOperandAsString(0));
     } break;
     case spv::Op::OpTypePointer: {
       uint32_t pointee_type_id = inst.GetSingleWordInOperand(1);

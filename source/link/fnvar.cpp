@@ -209,7 +209,7 @@ bool CanBeFnVarCombined(const Instruction* inst) {
   }
 
   if ((opcode == spv::Op::OpExtension) &&
-      (inst->GetOperand(0).AsString() == FNVAR_EXT_NAME)) {
+      (inst->GetOperandAsString(0) == FNVAR_EXT_NAME)) {
     // Always enabled
     return false;
   }
@@ -232,7 +232,7 @@ size_t HashInst(const Instruction* inst) {
     }
 
     if (inst->opcode() == spv::Op::OpExtension) {
-      const auto name = inst->GetOperand(0).AsString();
+      const auto name = inst->GetOperandAsString(0);
       return std::hash<std::string>()(name);
     }
 
@@ -242,7 +242,7 @@ size_t HashInst(const Instruction* inst) {
     }
 
     if (inst->opcode() == spv::Op::OpExtInstImport) {
-      const auto name = inst->GetOperand(1).AsString();
+      const auto name = inst->GetOperandAsString(1);
       return std::hash<std::string>()(name);
     }
   }
@@ -257,7 +257,7 @@ std::string GetFnName(const Instruction& fn_inst) {
   if (ep_inst != nullptr) {
     const int name_i =
         ep_inst->opcode() == spv::Op::OpConditionalEntryPointINTEL ? 3 : 2;
-    return ep_inst->GetOperand(name_i).AsString();
+    return ep_inst->GetOperandAsString(name_i);
   }
 
   // Check name of export linkage attribute decoration
@@ -276,7 +276,7 @@ std::string GetFnName(const Instruction& fn_inst) {
            static_cast<uint32_t>(spv::LinkageType::Export))) {
         // decorates fn with LinkageAttribute and Export linkage type -> get the
         // name
-        return inst->GetOperand(2).AsString();
+        return inst->GetOperandAsString(2);
       }
     }
   }
@@ -291,7 +291,7 @@ uint32_t FindSpecConstByName(const Module* mod, std::string name) {
       for (const auto& name_inst : mod->debugs2()) {
         if ((name_inst.opcode() == spv::Op::OpName) &&
             (name_inst.GetOperand(0).AsId() == id) &&
-            (name_inst.GetOperand(1).AsString() == name)) {
+            (name_inst.GetOperandAsString(0) == name)) {
           return id;
         }
       }
@@ -995,7 +995,7 @@ void VariantDefs::CombineInstructions(IRContext* linked_context) {
               inst->SetInOperands({{SPV_OPERAND_TYPE_ID, {spec_const_comb_id}},
                                    {SPV_OPERAND_TYPE_CAPABILITY, {cap}}});
             } else if (inst->opcode() == spv::Op::OpExtension) {
-              const std::string ext_name = inst->GetOperand(0).AsString();
+              const std::string ext_name = inst->GetOperandAsString(0);
               inst->SetOpcode(spv::Op::OpConditionalExtensionINTEL);
               inst->SetInOperands({{SPV_OPERAND_TYPE_ID, {spec_const_comb_id}},
                                    {SPV_OPERAND_TYPE_LITERAL_STRING,

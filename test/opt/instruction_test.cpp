@@ -62,10 +62,16 @@ TEST(InstructionTest, CreateWithOpcodeAndNoOperands) {
   EXPECT_EQ(inst.end(), inst.begin());
 }
 
-TEST(InstructionTest, OperandAsString) {
+TEST(InstructionTest, OperandAsString_LittleEndian) {
   Operand::OperandData abcde{0x64636261, 0x65};
   Operand operand(SPV_OPERAND_TYPE_LITERAL_STRING, std::move(abcde));
-  EXPECT_EQ("abcde", operand.AsString());
+  EXPECT_EQ("abcde", operand.AsString(SPV_ENDIANNESS_LITTLE));
+}
+
+TEST(InstructionTest, OperandAsString_BigEndian) {
+  Operand::OperandData abcde{0x61626364, 0x65000000};
+  Operand operand(SPV_OPERAND_TYPE_LITERAL_STRING, std::move(abcde));
+  EXPECT_EQ("abcde", operand.AsString(SPV_ENDIANNESS_LITTLE));
 }
 
 TEST(InstructionTest, OperandAsLiteralUint64_32bits) {

@@ -171,6 +171,11 @@ class ValidationState_t {
   /// Mutator function for ID bound.
   void setIdBound(uint32_t bound);
 
+  /// Getter function for endianness.
+  spv_endianness_t getEndian() const { return endian_; }
+  /// Mutator function for endianness.
+  void setEndian(spv_endianness_t endian) { endian_ = endian; }
+
   /// Returns the number of ID which have been forward referenced but not
   /// defined
   size_t unresolved_forward_id_count() const;
@@ -1008,6 +1013,9 @@ class ValidationState_t {
   ValidationState_t(const ValidationState_t&);
 
   const spv_const_context context_;
+  /// Stores the module binary endianness. This is updated during initial
+  /// parsing.
+  spv_endianness_t endian_ = SPV_ENDIANNESS_LITTLE;
 
   /// Stores the Validator command line options. Must be a valid options object.
   const spv_const_validator_options options_;

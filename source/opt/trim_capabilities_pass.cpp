@@ -594,9 +594,10 @@ void TrimCapabilitiesPass::addInstructionRequirementsForExtInst(
 
   const Operand& extInstSet =
       extInstImport->GetInOperand(kOpExtInstImportNameInIndex);
+  const auto name =
+      extInstImport->GetInOperandAsString(kOpExtInstImportNameInIndex);
 
-  spv_ext_inst_type_t instructionSet =
-      spvExtInstImportTypeGet(extInstSet.AsString().c_str());
+  spv_ext_inst_type_t instructionSet = spvExtInstImportTypeGet(name.c_str());
 
   const ExtInstDesc* desc = nullptr;
   auto result = LookupExtInst(instructionSet, extInstruction, &desc);
