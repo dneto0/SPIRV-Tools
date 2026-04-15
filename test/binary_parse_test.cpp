@@ -66,6 +66,22 @@ TEST_F(MaybeFlipWordsTest, Flip) {
   EXPECT_EQ(words[1], 0xefcdab89);
 }
 
+TEST_F(MaybeFlipWordsTest, spvtest_DoNotFlip) {
+  std::vector<uint32_t> words{0x01234567, 0x89abcdef};
+  spvtest::MaybeFlipWords(false, words.begin(), words.end());
+  EXPECT_EQ(words.size(), size_t(2));
+  EXPECT_EQ(words[0], 0x01234567);
+  EXPECT_EQ(words[1], 0x89abcdef);
+}
+
+TEST_F(MaybeFlipWordsTest, spvtest_Flip) {
+  std::vector<uint32_t> words{0x01234567, 0x89abcdef};
+  spvtest::MaybeFlipWords(true, words.begin(), words.end());
+  EXPECT_EQ(words.size(), size_t(2));
+  EXPECT_EQ(words[0], 0x67452301);
+  EXPECT_EQ(words[1], 0xefcdab89);
+}
+
 // An easily-constructible and comparable object for the contents of an
 // spv_parsed_instruction_t.  Unlike spv_parsed_instruction_t, owns the memory
 // of its components.

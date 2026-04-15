@@ -31,6 +31,19 @@ struct ScopedContext {
   spv_context context;
 };
 
+// Potentially flip the words in the binary representation to the other
+// endianness
+template <class It>
+void MaybeFlipWords(bool flip_words, It begin, It end) {
+  if (flip_words) {
+    std::transform(begin, end, begin, [](const uint32_t raw_word) {
+      return spvFixWord(raw_word, I32_ENDIAN_HOST == I32_ENDIAN_BIG
+                                      ? SPV_ENDIANNESS_LITTLE
+                                      : SPV_ENDIANNESS_BIG);
+    });
+  }
+}
+
 // Common setup for TextToBinary tests. SetText() should be called to populate
 // the actual test text.
 template <typename T>
@@ -97,13 +110,7 @@ class TextToBinaryTestBase : public T {
   template <class It>
   void MaybeFlipWords(bool flip_words, It begin, It end) {
     SCOPED_TRACE(flip_words ? "Flipped Endianness" : "Normal Endianness");
-    if (flip_words) {
-      std::transform(begin, end, begin, [](const uint32_t raw_word) {
-        return spvFixWord(raw_word, I32_ENDIAN_HOST == I32_ENDIAN_BIG
-                                        ? SPV_ENDIANNESS_LITTLE
-                                        : SPV_ENDIANNESS_BIG);
-      });
-    }
+    spvtest::MaybeFlipWords(flip_words, begin, end);
   }
 
   // Encodes SPIR-V text into binary and then decodes the binary using

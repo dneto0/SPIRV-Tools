@@ -21,6 +21,7 @@
 #include "source/opt/build_module.h"
 #include "source/opt/ir_context.h"
 #include "spirv-tools/libspirv.hpp"
+#include "test/test_fixture.h"
 #include "tools/util/cli_consumer.h"
 
 namespace {
@@ -28,21 +29,22 @@ namespace {
 constexpr auto kDefaultEnvironment = SPV_ENV_UNIVERSAL_1_6;
 
 std::pair<bool, std::unordered_map<std::string, std::string>> ExtractSource(
-    const std::string& spv_source) {
+    const std::string& spv_source, bool nonHostEndianness) {
   std::unique_ptr<spvtools::opt::IRContext> ctx = spvtools::BuildModule(
       kDefaultEnvironment, spvtools::utils::CLIMessageConsumer, spv_source,
       spvtools::SpirvTools::kDefaultAssembleOption |
           SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
   std::vector<uint32_t> binary;
   ctx->module()->ToBinary(&binary, /* skip_nop = */ false);
+  spvtest::MaybeFlipWords(nonHostEndianness, binary.begin(), binary.end());
   std::unordered_map<std::string, std::string> output;
   bool result = ExtractSourceFromModule(binary, &output);
   return std::make_pair(result, std::move(output));
 }
 
-}  // namespace
+using ExtractSourceTest = ::testing::TestWithParam<bool>;
 
-TEST(ExtractSourceTest, no_debug) {
+TEST_P(ExtractSourceTest, no_debug) {
   std::string source = R"(
            OpCapability Shader
            OpCapability Linkage
@@ -57,12 +59,12 @@ TEST(ExtractSourceTest, no_debug) {
            OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 0);
 }
 
-TEST(ExtractSourceTest, SimpleSource) {
+TEST_P(ExtractSourceTest, SimpleSource) {
   std::string source = R"(
       OpCapability Shader
       OpMemoryModel Logical GLSL450
@@ -80,14 +82,14 @@ TEST(ExtractSourceTest, SimpleSource) {
       OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] ==
               "[numthreads(1, 1, 1)] void compute_1(){ }");
 }
 
-TEST(ExtractSourceTest, SourceContinued) {
+TEST_P(ExtractSourceTest, SourceContinued) {
   std::string source = R"(
       OpCapability Shader
       OpMemoryModel Logical GLSL450
@@ -106,14 +108,14 @@ TEST(ExtractSourceTest, SourceContinued) {
       OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] ==
               "[numthreads(1, 1, 1)] void compute_1(){ }");
 }
 
-TEST(ExtractSourceTest, OnlyFilename) {
+TEST_P(ExtractSourceTest, OnlyFilename) {
   std::string source = R"(
       OpCapability Shader
       OpMemoryModel Logical GLSL450
@@ -131,13 +133,13 @@ TEST(ExtractSourceTest, OnlyFilename) {
       OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] == "");
 }
 
-TEST(ExtractSourceTest, MultipleFiles) {
+TEST_P(ExtractSourceTest, MultipleFiles) {
   std::string source = R"(
       OpCapability Shader
       OpMemoryModel Logical GLSL450
@@ -157,14 +159,14 @@ TEST(ExtractSourceTest, MultipleFiles) {
       OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 2);
   ASSERT_TRUE(result["compute1.hlsl"] == "some instruction");
   ASSERT_TRUE(result["compute2.hlsl"] == "some other instruction");
 }
 
-TEST(ExtractSourceTest, MultilineCode) {
+TEST_P(ExtractSourceTest, MultilineCode) {
   std::string source = R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -185,14 +187,14 @@ void compute_1() {
                OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] ==
               "[numthreads(1, 1, 1)]\nvoid compute_1() {\n}\n");
 }
 
-TEST(ExtractSourceTest, EmptyFilename) {
+TEST_P(ExtractSourceTest, EmptyFilename) {
   std::string source = R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -210,13 +212,13 @@ TEST(ExtractSourceTest, EmptyFilename) {
                OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["unnamed-0.hlsl"] == "void compute(){}");
 }
 
-TEST(ExtractSourceTest, EscapeEscaped) {
+TEST_P(ExtractSourceTest, EscapeEscaped) {
   std::string source = R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -234,13 +236,13 @@ TEST(ExtractSourceTest, EscapeEscaped) {
                OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] == "// check \" escape removed");
 }
 
-TEST(ExtractSourceTest, OpSourceWithNoSource) {
+TEST_P(ExtractSourceTest, OpSourceWithNoSource) {
   std::string source = R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -258,8 +260,69 @@ TEST(ExtractSourceTest, OpSourceWithNoSource) {
                OpFunctionEnd
   )";
 
-  auto[success, result] = ExtractSource(source);
+  auto [success, result] = ExtractSource(source, GetParam());
   ASSERT_TRUE(success);
   ASSERT_TRUE(result.size() == 1);
   ASSERT_TRUE(result["compute.hlsl"] == "");
 }
+
+TEST_P(ExtractSourceTest, ExtendedInstructionSet) {
+  std::string source = R"(
+      OpCapability Shader
+ %1 = OpExtInstImport "GLSL.std.450"
+      OpMemoryModel Logical GLSL450
+      OpEntryPoint GLCompute %11 "main"
+      OpExecutionMode %1 LocalSize 1 1 1
+ %2 = OpString "compute.hlsl"
+      OpSource HLSL 660 %2 "[numthreads(1, 1, 1)] void main(){ }"
+      OpName %1 "main"
+ %3 = OpTypeVoid
+ %4 = OpTypeFunction %3
+ %9 = OpTypeFloat 32
+%13 = OpConstant %9 3.14
+%11 = OpFunction %3 None %4
+ %5 = OpLabel
+%10 = OpExtInst %9 %1 Sin %13
+      OpReturn
+      OpFunctionEnd
+  )";
+
+  auto [success, result] = ExtractSource(source, GetParam());
+  ASSERT_TRUE(success);
+  ASSERT_TRUE(result.size() == 1);
+  ASSERT_TRUE(result["compute.hlsl"] == "[numthreads(1, 1, 1)] void main(){ }")
+      << result["compute.hlsl"];
+}
+
+TEST_P(ExtractSourceTest, Extension) {
+  std::string source = R"(
+      OpCapability Shader
+      OpCapability Int8
+      OpExtension "SPV_KHR_8bit_storage"
+      OpMemoryModel Logical GLSL450
+      OpEntryPoint GLCompute %main "main" %v
+      OpExecutionMode %1 LocalSize 1 1 1
+ %3 = OpTypeVoid
+ %4 = OpTypeFunction %3
+%char = OpTypeInt 8 1
+%char_a = OpConstant %char 65
+%pchar = OpTypePointer StorageBuffer %char
+%v  = OpVariable %pchar StorageBuffer
+%main = OpFunction %3 None %4
+ %5 = OpLabel
+      OpStore %v %char_a
+      OpReturn
+      OpFunctionEnd
+  )";
+
+  auto [success, result] = ExtractSource(source, GetParam());
+  EXPECT_TRUE(success);
+  ASSERT_EQ(result.size(), 0) << result.size();
+}
+
+INSTANTIATE_TEST_SUITE_P(HostEndian, ExtractSourceTest,
+                         ::testing::Values(false));
+INSTANTIATE_TEST_SUITE_P(OppositeEndian, ExtractSourceTest,
+                         ::testing::Values(true));
+
+}  // namespace
